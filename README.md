@@ -5,7 +5,7 @@
     ██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║██╔══╝  ██║     ██╔══██║╚════██║██╔══██║
     ╚██████╔╝██║     ███████╗██║ ╚████║██║     ███████╗██║  ██║███████║██║  ██║
      ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝╚═╝     ╚══════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
-                                                                        v1.5.0
+                                                                        v1.7.0
 ```
 
 <div align="center">
@@ -57,11 +57,11 @@ Commercial NAND programmers cost **$200-2000**. They run on Windows XP. They loo
 
 ## 📥 Download
 
-**v1.5.0** — ESP32 & STM32F4 Support
+**v1.7.0** — Advanced Write Operations
 
 | | | |
 |:---:|:---:|:---:|
-| [**Windows**](https://github.com/openflash/openflash/releases/download/v1.5.0/OpenFlash-1.5.0-x64.msi)<br>`OpenFlash-1.5.0-x64.msi` | [**macOS**](https://github.com/openflash/openflash/releases/download/v1.5.0/OpenFlash-1.5.0.dmg)<br>`OpenFlash-1.5.0.dmg` | [**Linux**](https://github.com/openflash/openflash/releases/download/v1.5.0/OpenFlash-1.5.0.AppImage)<br>`OpenFlash-1.5.0.AppImage` |
+| [**Windows**](https://github.com/openflash/openflash/releases/download/v1.7.0/OpenFlash-1.7.0-x64.msi)<br>`OpenFlash-1.7.0-x64.msi` | [**macOS**](https://github.com/openflash/openflash/releases/download/v1.7.0/OpenFlash-1.7.0.dmg)<br>`OpenFlash-1.7.0.dmg` | [**Linux**](https://github.com/openflash/openflash/releases/download/v1.7.0/OpenFlash-1.7.0.AppImage)<br>`OpenFlash-1.7.0.AppImage` |
 
 <details>
 <summary><b>Build from source</b></summary>
@@ -473,29 +473,30 @@ v1.4  ✅  AI Analysis v1.4
           ├── Dump comparison (diff)
           └── Report export (Markdown)
 
-v1.5  ✅  ESP32 & STM32F4 Support ← YOU ARE HERE
+v1.5  ✅  ESP32 & STM32F4 Support
           ├── ESP32 firmware (WiFi/BLE wireless operation!)
           ├── STM32F4 firmware (faster, USB OTG, FSMC)
           ├── Web interface for ESP32 (browser control)
           ├── 4 supported platforms: RP2040, STM32F1, STM32F4, ESP32
           └── Protocol v1.5 with WiFi commands
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+v1.6  ✅  NOR Flash & UFS Support
+          ├── SPI NOR flash (W25Q, MX25L, IS25LP) — 30+ chips
+          ├── UFS (Universal Flash Storage) — v2.0-4.0
+          ├── ONFI 5.0 support with NV-DDR3
+          ├── 16-bit parallel NAND bus
+          └── 10 property-based tests
 
-v1.6  🔜  NOR Flash & UFS Support
-          ├── SPI NOR flash (W25Q, MX25L, etc.)
-          ├── UFS (Universal Flash Storage) via UniPro
-          ├── ONFI 5.0 support
-          └── 16-bit parallel NAND bus
-
-v1.7  📋  Advanced Write Operations
-          ├── Full chip programming
-          ├── Bad block management
-          ├── Wear leveling write
+v1.7  ✅  Advanced Write Operations ← YOU ARE HERE
+          ├── Full chip programming with verification
+          ├── Bad block management (auto-remap)
+          ├── Wear leveling (erase count tracking)
           ├── Incremental backup/restore
           └── Clone chip-to-chip
 
-v1.8  📋  Scripting & Automation
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+v1.8  🔜  Scripting & Automation
           ├── Python API (pyopenflash)
           ├── CLI tool for headless operation
           ├── Batch processing
@@ -557,7 +558,7 @@ MIT. Do whatever. Don't sue us.
 
 <div align="center">
 
-**OpenFlash v1.5.0**
+**OpenFlash v1.7.0**
 
 *Your data wants to be free.*
 

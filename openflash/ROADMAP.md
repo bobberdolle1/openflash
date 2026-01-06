@@ -2,7 +2,7 @@
 
 Детальный план развития проекта OpenFlash.
 
-## Текущий статус: v1.6.0
+## Текущий статус: v1.7.0
 
 ---
 
@@ -52,7 +52,7 @@
 - Web interface для ESP32
 - 4 платформы: RP2040, STM32F1, STM32F4, ESP32
 
-### v1.6 — NOR Flash & UFS Support ← ТЕКУЩАЯ
+### v1.6 — NOR Flash & UFS Support
 - SPI NOR flash (W25Q, MX25L, IS25LP) — 30+ чипов
 - UFS (Universal Flash Storage) — версии 2.0-4.0
 - ONFI 5.0 support с NV-DDR3
@@ -60,28 +60,18 @@
 - 10 property-based тестов
 - GUI: SPI NOR operations panel, UFS LUN selector
 
+### v1.7 — Advanced Write Operations ← ТЕКУЩАЯ
+- Full chip programming с верификацией
+- Bad block management (автоматическое управление)
+- Wear leveling write (отслеживание износа)
+- Incremental backup/restore (только изменённые блоки)
+- Clone chip-to-chip (клонирование между чипами)
+- 12 новых протокольных команд (0xA0-0xAB)
+- 15 unit тестов для write_ops модуля
+
 ---
 
 ## 🔜 Ближайшие планы
-
-### v1.7 — Advanced Write Operations
-**Цель:** Полноценная запись и клонирование
-
-| Фича | Приоритет | Сложность |
-|------|-----------|-----------|
-| Full chip programming | 🔴 High | Medium |
-| Bad block management | 🔴 High | High |
-| Wear leveling write | 🟡 Medium | High |
-| Incremental backup/restore | 🟡 Medium | Medium |
-| Clone chip-to-chip | 🟢 Low | Medium |
-
-**Детали:**
-- Программирование с верификацией
-- Автоматическое управление bad blocks
-- Wear-aware запись для продления жизни чипа
-- Инкрементальный бэкап (только изменённые блоки)
-
----
 
 ### v1.8 — Scripting & Automation
 **Цель:** Автоматизация и интеграция
@@ -232,7 +222,7 @@ analysis.export_report("report.md")
 |--------|----------------|--------|
 | v1.5 | Q1 2026 | ✅ Released |
 | v1.6 | Q1 2026 | ✅ Released |
-| v1.7 | Q2 2026 | 📋 Planned |
+| v1.7 | Q2 2026 | ✅ Released |
 | v1.8 | Q3 2026 | 📋 Planned |
 | v1.9 | Q4 2026 | 📋 Planned |
 | v2.0 | Q1 2027 | 📋 Planned |

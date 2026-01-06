@@ -7,6 +7,7 @@ pub mod spi_nor;
 pub mod emmc;
 pub mod ufs;
 pub mod ai;
+pub mod write_ops;
 
 pub use onfi::*;
 pub use protocol::*;
@@ -36,5 +37,13 @@ pub use ufs::{
     DeviceDescriptor, UnitDescriptor, GeometryDescriptor,
     ScsiCdbBuilder, ReadCommandType, select_read_command,
     get_ufs_manufacturer_name,
+};
+pub use write_ops::{
+    WriteError, WriteResult,
+    BadBlockTable, BadBlockEntry, BadBlockReason,
+    WearLevelingManager, BlockWearInfo, WearStatistics,
+    ChipProgrammer, ProgramOptions, ProgramProgress, ProgramOperation,
+    ChangeTracker, BackupMetadata,
+    ChipCloner, CloneOptions, CloneMode, CloneProgress, ClonePhase,
 };
 

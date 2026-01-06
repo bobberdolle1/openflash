@@ -7,6 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-Q2
+
+### Added
+- **Advanced Write Operations**
+  - New `write_ops` module in core library for full chip programming
+  - **Full Chip Programming**: Complete chip write with automatic verification
+  - **Bad Block Management**: Automatic bad block detection, tracking, and remapping
+    - Factory bad block scanning from OOB markers
+    - Runtime bad block detection (erase/program failures)
+    - Spare block allocation for transparent remapping
+    - Bad block table (BBT) persistence
+  - **Wear Leveling**: Intelligent write distribution for extended chip life
+    - Per-block erase count tracking
+    - Wear statistics and remaining life estimation
+    - Hot/cold block identification
+    - Automatic wear leveling candidates selection
+  - **Incremental Backup/Restore**: Efficient backup of only changed blocks
+    - Block-level change tracking with checksums (FNV-1a)
+    - Full and incremental backup metadata
+    - Parent-child backup chain support
+  - **Chip-to-Chip Cloning**: Direct clone between compatible chips
+    - Exact, skip-bad-blocks, and wear-aware clone modes
+    - Automatic block mapping with bad block handling
+    - Progress tracking with ETA estimation
+
+- **New Protocol Commands (0xA0-0xAB)**
+  - `FullChipProgram` (0xA0) - Full chip programming with verify
+  - `ReadBadBlockTable` (0xA1) - Read bad block table
+  - `WriteBadBlockTable` (0xA2) - Write bad block table
+  - `ScanBadBlocks` (0xA3) - Scan for bad blocks
+  - `MarkBadBlock` (0xA4) - Mark block as bad
+  - `GetWearInfo` (0xA5) - Get wear leveling info
+  - `ProgramWithVerify` (0xA6) - Program page with verification
+  - `EraseWithVerify` (0xA7) - Erase block with verification
+  - `IncrementalRead` (0xA8) - Read only changed blocks
+  - `CloneStart` (0xA9) - Start chip-to-chip clone
+  - `CloneStatus` (0xAA) - Get clone operation status
+  - `CloneAbort` (0xAB) - Abort clone operation
+
+- **New Types and Structures**
+  - `WriteError` - Comprehensive error types for write operations
+  - `BadBlockTable`, `BadBlockEntry`, `BadBlockReason` - BBT management
+  - `WearLevelingManager`, `BlockWearInfo`, `WearStatistics` - Wear tracking
+  - `ChipProgrammer`, `ProgramOptions`, `ProgramProgress` - Programming control
+  - `ChangeTracker`, `BackupMetadata` - Incremental backup support
+  - `ChipCloner`, `CloneOptions`, `CloneMode`, `CloneProgress` - Cloning support
+
+### Changed
+- Protocol version updated to 0x17
+- Core library version updated to 1.7.0
+- Added `is_write_ops()` method to Command enum
+- Extended lib.rs exports with write_ops types
+
+### Tests
+- 15 new unit tests for write operations module
+- Bad block table creation and management tests
+- Wear leveling tracking and limit tests
+- Change tracker and checksum tests
+- Chip programmer address conversion tests
+- Clone compatibility and block mapping tests
+
 ## [1.6.0] - 2026-01-XX
 
 ### Added
@@ -289,6 +350,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
+- **1.7.0** - Advanced write operations, bad block management, wear leveling, incremental backup, cloning
 - **1.6.0** - SPI NOR flash, UFS, ONFI 5.0, 16-bit NAND support
 - **1.5.0** - ESP32 support, STM32F4 support, WiFi connectivity
 - **1.4.0** - AI v1.4: Filesystem detection, OOB analysis, key search, wear analysis, memory map

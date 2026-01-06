@@ -94,6 +94,20 @@ pub enum Command {
     UfsWrite16 = 0x86,            // SCSI WRITE(16) command
     UfsSelectLun = 0x87,          // Select logical unit
     UfsGetStatus = 0x88,          // Get device status
+    
+    // Advanced Write Operations (0xA0-0xBF) - v1.7
+    FullChipProgram = 0xA0,       // Full chip programming with verify
+    ReadBadBlockTable = 0xA1,     // Read bad block table
+    WriteBadBlockTable = 0xA2,    // Write bad block table
+    ScanBadBlocks = 0xA3,         // Scan for bad blocks
+    MarkBadBlock = 0xA4,          // Mark block as bad
+    GetWearInfo = 0xA5,           // Get wear leveling info
+    ProgramWithVerify = 0xA6,     // Program page with verification
+    EraseWithVerify = 0xA7,       // Erase block with verification
+    IncrementalRead = 0xA8,       // Read only changed blocks
+    CloneStart = 0xA9,            // Start chip-to-chip clone
+    CloneStatus = 0xAA,           // Get clone operation status
+    CloneAbort = 0xAB,            // Abort clone operation
 }
 
 impl Command {
@@ -175,6 +189,20 @@ impl Command {
             0x87 => Some(Command::UfsSelectLun),
             0x88 => Some(Command::UfsGetStatus),
             
+            // Advanced Write Operations (v1.7)
+            0xA0 => Some(Command::FullChipProgram),
+            0xA1 => Some(Command::ReadBadBlockTable),
+            0xA2 => Some(Command::WriteBadBlockTable),
+            0xA3 => Some(Command::ScanBadBlocks),
+            0xA4 => Some(Command::MarkBadBlock),
+            0xA5 => Some(Command::GetWearInfo),
+            0xA6 => Some(Command::ProgramWithVerify),
+            0xA7 => Some(Command::EraseWithVerify),
+            0xA8 => Some(Command::IncrementalRead),
+            0xA9 => Some(Command::CloneStart),
+            0xAA => Some(Command::CloneStatus),
+            0xAB => Some(Command::CloneAbort),
+            
             _ => None,
         }
     }
@@ -253,6 +281,24 @@ impl Command {
             Command::UfsWrite16 |
             Command::UfsSelectLun |
             Command::UfsGetStatus
+        )
+    }
+    
+    /// Check if command is for advanced write operations (v1.7)
+    pub fn is_write_ops(&self) -> bool {
+        matches!(self,
+            Command::FullChipProgram |
+            Command::ReadBadBlockTable |
+            Command::WriteBadBlockTable |
+            Command::ScanBadBlocks |
+            Command::MarkBadBlock |
+            Command::GetWearInfo |
+            Command::ProgramWithVerify |
+            Command::EraseWithVerify |
+            Command::IncrementalRead |
+            Command::CloneStart |
+            Command::CloneStatus |
+            Command::CloneAbort
         )
     }
 }
@@ -463,5 +509,26 @@ mod tests {
         assert_eq!(FlashInterface::SpiNor as u8, 0x03);
         assert_eq!(FlashInterface::Ufs as u8, 0x04);
         assert_eq!(FlashInterface::ParallelNand16 as u8, 0x05);
+    }
+    
+    #[test]
+    fn test_write_ops_command_from_u8() {
+        assert_eq!(Command::from_u8(0xA0), Some(Command::FullChipProgram));
+        assert_eq!(Command::from_u8(0xA1), Some(Command::ReadBadBlockTable));
+        assert_eq!(Command::from_u8(0xA3), Some(Command::ScanBadBlocks));
+        assert_eq!(Command::from_u8(0xA6), Some(Command::ProgramWithVerify));
+        assert_eq!(Command::from_u8(0xA9), Some(Command::CloneStart));
+        assert_eq!(Command::from_u8(0xAB), Some(Command::CloneAbort));
+    }
+    
+    #[test]
+    fn test_write_ops_command_detection() {
+        assert!(Command::FullChipProgram.is_write_ops());
+        assert!(Command::ReadBadBlockTable.is_write_ops());
+        assert!(Command::ScanBadBlocks.is_write_ops());
+        assert!(Command::CloneStart.is_write_ops());
+        assert!(!Command::SpiNorRead.is_write_ops());
+        assert!(!Command::EmmcInit.is_write_ops());
+        assert!(!Command::Ping.is_write_ops());
     }
 }

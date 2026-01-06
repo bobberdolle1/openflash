@@ -5,7 +5,7 @@
     ██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║██╔══╝  ██║     ██╔══██║╚════██║██╔══██║
     ╚██████╔╝██║     ███████╗██║ ╚████║██║     ███████╗██║  ██║███████║██║  ██║
      ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝╚═╝     ╚══════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
-                                                                        v1.3.0
+                                                                        v1.4.0
 ```
 
 <div align="center">
@@ -42,8 +42,8 @@ Commercial NAND programmers cost **$200-2000**. They run on Windows XP. They loo
 │   + 20 jumper wires ($1)                  Parallel NAND:                │
 │   + This software (free)                  Samsung, Hynix, Micron...     │
 │   ─────────────────────────                                             │
-│   = Full NAND programmer                  SPI NAND (v1.1+):
-                                           GigaDevice, Winbond...        │
+│   = Full NAND programmer                  SPI NAND (v1.1+):             │
+│                                           GigaDevice, Winbond...        │
 │                                                                         │
 │                                           eMMC (v1.2+):                 │
 │                                           Samsung, Micron, SanDisk...   │
@@ -57,11 +57,11 @@ Commercial NAND programmers cost **$200-2000**. They run on Windows XP. They loo
 
 ## 📥 Download
 
-**v1.0.0** — First stable release
+**v1.4.0** — AI Analysis Major Upgrade
 
 | | | |
 |:---:|:---:|:---:|
-| [**Windows**](https://github.com/openflash/openflash/releases/download/v1.0.0/OpenFlash-1.0.0-x64.msi)<br>`OpenFlash-1.0.0-x64.msi` | [**macOS**](https://github.com/openflash/openflash/releases/download/v1.0.0/OpenFlash-1.0.0.dmg)<br>`OpenFlash-1.0.0.dmg` | [**Linux**](https://github.com/openflash/openflash/releases/download/v1.0.0/OpenFlash-1.0.0.AppImage)<br>`OpenFlash-1.0.0.AppImage` |
+| [**Windows**](https://github.com/openflash/openflash/releases/download/v1.4.0/OpenFlash-1.4.0-x64.msi)<br>`OpenFlash-1.4.0-x64.msi` | [**macOS**](https://github.com/openflash/openflash/releases/download/v1.4.0/OpenFlash-1.4.0.dmg)<br>`OpenFlash-1.4.0.dmg` | [**Linux**](https://github.com/openflash/openflash/releases/download/v1.4.0/OpenFlash-1.4.0.AppImage)<br>`OpenFlash-1.4.0.AppImage` |
 
 <details>
 <summary><b>Build from source</b></summary>
@@ -84,7 +84,7 @@ Requires: Rust 1.70+, Node 18+, [Tauri prerequisites](https://tauri.app/v1/guide
 1. Open app
 2. Click [Mock] → [Scan] → [Connect]
 3. Click [Dump NAND]
-4. Explore: Hex View, Bitmap, Analysis
+4. Explore: Hex View, Bitmap, Analysis, AI
 ```
 
 ### Got a Raspberry Pi Pico?
@@ -211,16 +211,56 @@ Auto-detect:
 └── Entropy map    Spot encrypted/compressed regions
 ```
 
-### AI Analysis (v1.3+)
+### 🤖 AI Analysis v1.4 (NEW!)
 
 ```
-🤖 AI-Powered Features:
+AI-Powered Features:
 ├── Pattern Recognition
 │   ├── Encrypted regions (high entropy detection)
-│   ├── Compressed data (gzip, LZMA, XZ, zstd)
-│   ├── Executable code (ELF, U-Boot)
+│   ├── Compressed data (gzip, LZMA, XZ, zstd, LZ4)
+│   ├── Executable code (ELF, U-Boot, kernels)
 │   ├── Text/ASCII content
+│   ├── Bootloader & device tree detection
 │   └── Repeating patterns
+│
+├── Filesystem Detection (v1.4 NEW!)
+│   ├── YAFFS2, UBIFS, JFFS2
+│   ├── SquashFS, CramFS
+│   ├── ext2/3/4, F2FS
+│   ├── FAT16/32, NTFS
+│   └── Auto-detect at any offset
+│
+├── OOB/Spare Analysis (v1.4 NEW!)
+│   ├── Auto-detect ECC scheme
+│   │   ├── Hamming, BCH4-40
+│   │   ├── LDPC, Reed-Solomon
+│   │   └── Visual OOB layout
+│   ├── Bad block marker location
+│   └── User data area mapping
+│
+├── Encryption Key Search (v1.4 NEW!)
+│   ├── AES-128/192/256 key detection
+│   ├── High-entropy region analysis
+│   ├── Context-aware key identification
+│   └── Deep scan mode
+│
+├── Wear Leveling Analysis (v1.4 NEW!)
+│   ├── Erase count estimation
+│   ├── Hot/cold block identification
+│   ├── Remaining life prediction
+│   └── Wear distribution stats
+│
+├── Memory Map (v1.4 NEW!)
+│   ├── Visual memory layout
+│   ├── Partition detection
+│   ├── Interactive navigation
+│   └── Color-coded regions
+│
+├── Dump Comparison (v1.4 NEW!)
+│   ├── Diff analysis between dumps
+│   ├── Bit-flip detection
+│   ├── Similarity scoring
+│   └── Changed block tracking
 │
 ├── Anomaly Detection
 │   ├── Bad block markers
@@ -233,28 +273,31 @@ Auto-detect:
 │   ├── Re-dump suggestions
 │   └── Success probability estimates
 │
-└── Chip Recommendations
-    ├── Optimal page size detection
-    ├── ECC configuration tips
-    └── Read timing adjustments
+└── Report Export (v1.4 NEW!)
+    └── Markdown analysis reports
 ```
 
 ### Shows you everything
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ [Operations] [Hex View] [Bitmap] [Analysis]                 │
+│ [Operations] [Hex View] [Bitmap] [Analysis] [🤖 AI]         │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│  Hex Viewer         │  Bitmap View                          │
-│  ─────────────────  │  ────────────                         │
-│  00000000: 68 73 71 │  ████░░░░████████░░░░████             │
-│  00000010: 73 00 00 │  ████████████████████████             │
-│  00000020: 04 00 00 │  ░░░░░░░░░░░░░░░░░░░░░░░░             │
-│  ...                │  ████████░░░░░░░░████████             │
-│                     │                                       │
-│  Virtual scroll     │  Click to jump to page                │
-│  for GB-size dumps  │  Dark = data, Light = empty           │
+│  AI Analysis v1.4                                           │
+│  ─────────────────                                          │
+│  📊 Patterns │ ⚠️ Issues │ 📁 FS │ 📋 OOB │ 🔐 Keys        │
+│  📈 Wear │ 🗺️ Map │ 🔧 Recovery │ 💡 Tips                  │
+│                                                             │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ Data Quality: ████████████░░░░ 78%                  │   │
+│  │ Encryption:   ██░░░░░░░░░░░░░░ 12%                  │   │
+│  │ Compression:  ██████░░░░░░░░░░ 35%                  │   │
+│  │ Flash Life:   ████████████████ 95%                  │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                             │
+│  Memory Map:                                                │
+│  [Boot][Kernel████][RootFS██████████][Config][Empty░░░]    │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -286,27 +329,27 @@ Auto-detect:
 │  │  │    React     │  │    Tauri     │  │    openflash-core    │  │  │
 │  │  │   Frontend   │◄─┤    Rust      │◄─┤   ├── ONFI database  │  │  │
 │  │  │  TypeScript  │  │   Backend    │  │   ├── ECC engine     │  │  │
-│  │  └──────────────┘  └──────────────┘  │   └── Analysis AI    │  │  │
+│  │  └──────────────┘  └──────────────┘  │   └── AI Analysis    │  │  │
 │  │                                      └──────────────────────┘  │  │
 │  └────────────────────────────────────────────────────────────────┘  │
-└───────────────────────────────┬──────────────────────────────────────┘
-                                │
-                          USB Bulk Transfer
-                          64-byte packets
-                                │
-┌───────────────────────────────▼──────────────────────────────────────┐
+└───────────────────────────────────────┬──────────────────────────────┘
+                                        │
+                                  USB Bulk Transfer
+                                  64-byte packets
+                                        │
+┌───────────────────────────────────────▼──────────────────────────────┐
 │  RASPBERRY PI PICO                                                   │
 │  ┌────────────────────────────────────────────────────────────────┐  │
 │  │  Firmware (~10KB)                                              │  │
 │  │  ├── USB handler (embassy-usb)                                 │  │
 │  │  └── GPIO bit-bang / PIO for NAND timing                       │  │
 │  └────────────────────────────────────────────────────────────────┘  │
-└───────────────────────────────┬──────────────────────────────────────┘
-                                │
-                          Parallel bus
-                          8 data + 6 control
-                                │
-┌───────────────────────────────▼──────────────────────────────────────┐
+└───────────────────────────────────────┬──────────────────────────────┘
+                                        │
+                                  Parallel bus
+                                  8 data + 6 control
+                                        │
+┌───────────────────────────────────────▼──────────────────────────────┐
 │  NAND FLASH CHIP                                                     │
 │  Your secrets live here                                              │
 └──────────────────────────────────────────────────────────────────────┘
@@ -381,11 +424,20 @@ v1.25 ✅  STM32F1 SPI NAND & eMMC
           ├── eMMC support for Blue Pill
           └── Full feature parity with RP2040
 
-v1.3  ✅  AI-Powered Analysis ← YOU ARE HERE
+v1.3  ✅  AI-Powered Analysis
           ├── Intelligent pattern recognition
           ├── Anomaly detection & recovery suggestions
           ├── Encryption/compression detection
           └── Chip-specific recommendations
+
+v1.4  ✅  AI Analysis v1.4 ← YOU ARE HERE
+          ├── Filesystem detection (YAFFS2, UBIFS, ext4, FAT...)
+          ├── OOB/spare area analysis with ECC detection
+          ├── Encryption key search (AES-128/192/256)
+          ├── Wear leveling analysis & life prediction
+          ├── Memory map visualization
+          ├── Dump comparison (diff)
+          └── Report export (Markdown)
 
 v2.0  🚀  Multi-device parallel dumping
 ```
@@ -416,7 +468,7 @@ MIT. Do whatever. Don't sue us.
 
 <div align="center">
 
-**OpenFlash v1.25.0**
+**OpenFlash v1.4.0**
 
 *Your data wants to be free.*
 

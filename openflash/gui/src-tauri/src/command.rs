@@ -308,7 +308,7 @@ pub struct SignatureInfo {
 }
 
 // ============================================================================
-// AI Analysis commands (v1.3)
+// AI Analysis commands (v1.4)
 // ============================================================================
 
 #[derive(Serialize, Deserialize)]
@@ -321,6 +321,12 @@ pub struct AiAnalysisResponse {
     pub encryption_probability: f32,
     pub compression_probability: f32,
     pub summary: String,
+    // v1.4 additions
+    pub filesystems: Vec<FilesystemInfo>,
+    pub oob_analysis: Option<OobAnalysisInfo>,
+    pub key_candidates: Vec<KeyCandidateInfo>,
+    pub wear_analysis: Option<WearAnalysisInfo>,
+    pub memory_map: Option<MemoryMapInfo>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -356,7 +362,79 @@ pub struct ChipRecommendationInfo {
     pub importance: u8,
 }
 
-/// AI-powered analysis of dump data
+// v1.4 new structs
+#[derive(Serialize, Deserialize)]
+pub struct FilesystemInfo {
+    pub fs_type: String,
+    pub offset: usize,
+    pub size: Option<usize>,
+    pub confidence: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct OobAnalysisInfo {
+    pub oob_size: usize,
+    pub ecc_scheme: String,
+    pub ecc_offset: usize,
+    pub ecc_size: usize,
+    pub bad_block_marker_offset: usize,
+    pub confidence: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct KeyCandidateInfo {
+    pub offset: usize,
+    pub key_type: String,
+    pub key_length: usize,
+    pub entropy: f64,
+    pub confidence: String,
+    pub context: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct WearAnalysisInfo {
+    pub hottest_blocks: Vec<usize>,
+    pub coldest_blocks: Vec<usize>,
+    pub min_erases: u32,
+    pub max_erases: u32,
+    pub avg_erases: f32,
+    pub estimated_remaining_life_percent: f32,
+    pub recommendations: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct MemoryMapInfo {
+    pub total_size: usize,
+    pub regions: Vec<MemoryMapRegionInfo>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct MemoryMapRegionInfo {
+    pub start: usize,
+    pub end: usize,
+    pub region_type: String,
+    pub name: String,
+    pub color: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct DumpDiffResponse {
+    pub total_differences: usize,
+    pub changed_pages: Vec<usize>,
+    pub changed_blocks: Vec<usize>,
+    pub similarity_percent: f32,
+    pub modified_regions: Vec<DiffRegionInfo>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct DiffRegionInfo {
+    pub offset: usize,
+    pub size: usize,
+    pub change_type: String,
+    pub description: String,
+}
+
+/// AI-powered analysis of dump data (v1.4)
 #[tauri::command]
 pub fn ai_analyze_dump(
     data: Vec<u8>,
@@ -400,6 +478,48 @@ pub fn ai_analyze_dump(
         encryption_probability: result.encryption_probability,
         compression_probability: result.compression_probability,
         summary: result.summary,
+        // v1.4 additions
+        filesystems: result.filesystems.into_iter().map(|f| FilesystemInfo {
+            fs_type: f.fs_type.name().to_string(),
+            offset: f.offset,
+            size: f.size,
+            confidence: format!("{:?}", f.confidence),
+        }).collect(),
+        oob_analysis: result.oob_analysis.map(|o| OobAnalysisInfo {
+            oob_size: o.oob_size,
+            ecc_scheme: format!("{:?}", o.ecc_scheme),
+            ecc_offset: o.ecc_offset,
+            ecc_size: o.ecc_size,
+            bad_block_marker_offset: o.bad_block_marker_offset,
+            confidence: format!("{:?}", o.confidence),
+        }),
+        key_candidates: result.key_candidates.into_iter().map(|k| KeyCandidateInfo {
+            offset: k.offset,
+            key_type: k.key_type,
+            key_length: k.key_length,
+            entropy: k.entropy,
+            confidence: format!("{:?}", k.confidence),
+            context: k.context,
+        }).collect(),
+        wear_analysis: result.wear_analysis.map(|w| WearAnalysisInfo {
+            hottest_blocks: w.hottest_blocks,
+            coldest_blocks: w.coldest_blocks,
+            min_erases: w.wear_distribution.min_erases,
+            max_erases: w.wear_distribution.max_erases,
+            avg_erases: w.wear_distribution.avg_erases,
+            estimated_remaining_life_percent: w.estimated_remaining_life_percent,
+            recommendations: w.recommendations,
+        }),
+        memory_map: result.memory_map.map(|m| MemoryMapInfo {
+            total_size: m.total_size,
+            regions: m.regions.into_iter().map(|r| MemoryMapRegionInfo {
+                start: r.start,
+                end: r.end,
+                region_type: r.region_type,
+                name: r.name,
+                color: r.color,
+            }).collect(),
+        }),
     })
 }
 
@@ -442,6 +562,74 @@ pub fn ai_get_recommendations(
         description: r.description,
         importance: r.importance,
     }).collect())
+}
+
+/// v1.4: Compare two dumps
+#[tauri::command]
+pub fn ai_compare_dumps(
+    dump1: Vec<u8>,
+    dump2: Vec<u8>,
+    page_size: u32,
+    pages_per_block: u32,
+) -> Result<DumpDiffResponse, String> {
+    let analyzer = openflash_core::ai::AiAnalyzer::new(
+        page_size as usize,
+        pages_per_block as usize,
+    );
+    
+    let diff = analyzer.compare_dumps(&dump1, &dump2);
+    
+    Ok(DumpDiffResponse {
+        total_differences: diff.total_differences,
+        changed_pages: diff.changed_pages,
+        changed_blocks: diff.changed_blocks,
+        similarity_percent: diff.similarity_percent,
+        modified_regions: diff.modified_regions.into_iter().map(|r| DiffRegionInfo {
+            offset: r.offset,
+            size: r.size,
+            change_type: format!("{:?}", r.change_type),
+            description: r.description,
+        }).collect(),
+    })
+}
+
+/// v1.4: Deep scan for encryption keys
+#[tauri::command]
+pub fn ai_search_keys(
+    data: Vec<u8>,
+    page_size: u32,
+) -> Result<Vec<KeyCandidateInfo>, String> {
+    let analyzer = openflash_core::ai::AiAnalyzer::new(page_size as usize, 64)
+        .with_deep_scan(true);
+    
+    let keys = analyzer.search_encryption_keys(&data);
+    
+    Ok(keys.into_iter().map(|k| KeyCandidateInfo {
+        offset: k.offset,
+        key_type: k.key_type,
+        key_length: k.key_length,
+        entropy: k.entropy,
+        confidence: format!("{:?}", k.confidence),
+        context: k.context,
+    }).collect())
+}
+
+/// v1.4: Generate AI analysis report
+#[tauri::command]
+pub fn ai_generate_report(
+    data: Vec<u8>,
+    page_size: u32,
+    pages_per_block: u32,
+) -> Result<String, String> {
+    let analyzer = openflash_core::ai::AiAnalyzer::new(
+        page_size as usize,
+        pages_per_block as usize,
+    );
+    
+    let result = analyzer.analyze(&data);
+    let report = analyzer.generate_report(&result);
+    
+    Ok(report)
 }
 
 // ============================================================================

@@ -1,7 +1,17 @@
-//! AI-powered analysis module for OpenFlash v1.3
+//! AI-powered analysis module for OpenFlash v1.4
 //! 
 //! Provides intelligent analysis, pattern recognition, and recommendations
 //! for NAND/eMMC flash memory dumps.
+//!
+//! ## New in v1.4:
+//! - Filesystem detection (YAFFS2, UBIFS, ext4, FAT, NTFS)
+//! - OOB/spare area analysis
+//! - Encryption key pattern search
+//! - Dump comparison (diff analysis)
+//! - ECC scheme auto-detection
+//! - Wear leveling prediction
+//! - Memory map generation
+//! - AI report export
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -62,6 +72,202 @@ pub enum PatternType {
     Random,
     /// Filesystem metadata
     FilesystemMeta,
+    /// Boot loader region
+    BootLoader,
+    /// Kernel image
+    Kernel,
+    /// Device tree blob
+    DeviceTree,
+    /// Configuration/NVRAM data
+    ConfigData,
+    /// OOB/Spare area data
+    OobData,
+    /// Wear leveling metadata
+    WearLevelMeta,
+}
+
+/// Detected filesystem type (v1.4)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum FilesystemType {
+    YAFFS2,
+    UBIFS,
+    JFFS2,
+    SquashFS,
+    CramFS,
+    Ext4,
+    Ext3,
+    Ext2,
+    FAT16,
+    FAT32,
+    NTFS,
+    F2FS,
+    Unknown,
+}
+
+impl FilesystemType {
+    pub fn name(&self) -> &'static str {
+        match self {
+            FilesystemType::YAFFS2 => "YAFFS2",
+            FilesystemType::UBIFS => "UBIFS",
+            FilesystemType::JFFS2 => "JFFS2",
+            FilesystemType::SquashFS => "SquashFS",
+            FilesystemType::CramFS => "CramFS",
+            FilesystemType::Ext4 => "ext4",
+            FilesystemType::Ext3 => "ext3",
+            FilesystemType::Ext2 => "ext2",
+            FilesystemType::FAT16 => "FAT16",
+            FilesystemType::FAT32 => "FAT32",
+            FilesystemType::NTFS => "NTFS",
+            FilesystemType::F2FS => "F2FS",
+            FilesystemType::Unknown => "Unknown",
+        }
+    }
+}
+
+/// Detected ECC scheme (v1.4)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum EccScheme {
+    None,
+    Hamming,
+    BCH4,
+    BCH8,
+    BCH16,
+    BCH24,
+    BCH40,
+    LDPC,
+    ReedSolomon,
+    Unknown,
+}
+
+impl EccScheme {
+    pub fn correction_bits(&self) -> u8 {
+        match self {
+            EccScheme::None => 0,
+            EccScheme::Hamming => 1,
+            EccScheme::BCH4 => 4,
+            EccScheme::BCH8 => 8,
+            EccScheme::BCH16 => 16,
+            EccScheme::BCH24 => 24,
+            EccScheme::BCH40 => 40,
+            EccScheme::LDPC => 60,
+            EccScheme::ReedSolomon => 8,
+            EccScheme::Unknown => 0,
+        }
+    }
+}
+
+/// Filesystem detection result (v1.4)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FilesystemInfo {
+    pub fs_type: FilesystemType,
+    pub offset: usize,
+    pub size: Option<usize>,
+    pub confidence: Confidence,
+    pub details: HashMap<String, String>,
+}
+
+/// OOB analysis result (v1.4)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OobAnalysis {
+    pub oob_size: usize,
+    pub ecc_scheme: EccScheme,
+    pub ecc_offset: usize,
+    pub ecc_size: usize,
+    pub bad_block_marker_offset: usize,
+    pub user_data_offset: usize,
+    pub user_data_size: usize,
+    pub confidence: Confidence,
+}
+
+/// Encryption key candidate (v1.4)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KeyCandidate {
+    pub offset: usize,
+    pub key_type: String,
+    pub key_length: usize,
+    pub entropy: f64,
+    pub confidence: Confidence,
+    pub context: String,
+}
+
+/// Dump comparison result (v1.4)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DumpDiff {
+    pub total_differences: usize,
+    pub changed_pages: Vec<usize>,
+    pub changed_blocks: Vec<usize>,
+    pub added_regions: Vec<(usize, usize)>,
+    pub removed_regions: Vec<(usize, usize)>,
+    pub modified_regions: Vec<DiffRegion>,
+    pub similarity_percent: f32,
+}
+
+/// Single diff region (v1.4)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiffRegion {
+    pub offset: usize,
+    pub size: usize,
+    pub change_type: DiffChangeType,
+    pub description: String,
+}
+
+/// Type of change in diff (v1.4)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum DiffChangeType {
+    Added,
+    Removed,
+    Modified,
+    BitFlip,
+    Erased,
+}
+
+/// Wear leveling analysis (v1.4)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WearAnalysis {
+    pub estimated_erase_counts: Vec<(usize, u32)>,
+    pub hottest_blocks: Vec<usize>,
+    pub coldest_blocks: Vec<usize>,
+    pub wear_distribution: WearDistribution,
+    pub estimated_remaining_life_percent: f32,
+    pub recommendations: Vec<String>,
+}
+
+/// Wear distribution stats (v1.4)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WearDistribution {
+    pub min_erases: u32,
+    pub max_erases: u32,
+    pub avg_erases: f32,
+    pub std_deviation: f32,
+}
+
+/// Memory map region (v1.4)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryMapRegion {
+    pub start: usize,
+    pub end: usize,
+    pub region_type: String,
+    pub name: String,
+    pub description: String,
+    pub color: String,
+}
+
+/// Complete memory map (v1.4)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryMap {
+    pub total_size: usize,
+    pub regions: Vec<MemoryMapRegion>,
+    pub filesystems: Vec<FilesystemInfo>,
+    pub partitions: Vec<PartitionInfo>,
+}
+
+/// Partition info (v1.4)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PartitionInfo {
+    pub name: String,
+    pub offset: usize,
+    pub size: usize,
+    pub fs_type: Option<FilesystemType>,
 }
 
 /// Detected pattern in dump
@@ -122,6 +328,21 @@ pub struct AiAnalysisResult {
     pub encryption_probability: f32,
     pub compression_probability: f32,
     pub summary: String,
+    // v1.4 additions
+    pub filesystems: Vec<FilesystemInfo>,
+    pub oob_analysis: Option<OobAnalysis>,
+    pub key_candidates: Vec<KeyCandidate>,
+    pub wear_analysis: Option<WearAnalysis>,
+    pub memory_map: Option<MemoryMap>,
+}
+
+/// Extended AI analysis result for v1.4
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiAnalysisResultV14 {
+    pub base: AiAnalysisResult,
+    pub version: String,
+    pub analysis_time_ms: u64,
+    pub deep_scan_enabled: bool,
 }
 
 
@@ -133,6 +354,8 @@ pub struct AiAnalysisResult {
 pub struct AiAnalyzer {
     page_size: usize,
     block_size: usize,
+    oob_size: usize,
+    deep_scan: bool,
 }
 
 impl Default for AiAnalyzer {
@@ -146,6 +369,29 @@ impl AiAnalyzer {
         Self {
             page_size,
             block_size: pages_per_block,
+            oob_size: Self::estimate_oob_size(page_size),
+            deep_scan: false,
+        }
+    }
+
+    pub fn with_oob(mut self, oob_size: usize) -> Self {
+        self.oob_size = oob_size;
+        self
+    }
+
+    pub fn with_deep_scan(mut self, enabled: bool) -> Self {
+        self.deep_scan = enabled;
+        self
+    }
+
+    fn estimate_oob_size(page_size: usize) -> usize {
+        match page_size {
+            512 => 16,
+            2048 => 64,
+            4096 => 128,
+            8192 => 256,
+            16384 => 512,
+            _ => 64,
         }
     }
 
@@ -159,6 +405,13 @@ impl AiAnalyzer {
         let data_quality_score = self.calculate_data_quality(data, &anomalies);
         let encryption_probability = self.estimate_encryption_probability(data, &patterns);
         let compression_probability = self.estimate_compression_probability(data, &patterns);
+        
+        // v1.4: New analysis features
+        let filesystems = self.detect_filesystems(data);
+        let oob_analysis = self.analyze_oob(data);
+        let key_candidates = if self.deep_scan { self.search_encryption_keys(data) } else { Vec::new() };
+        let wear_analysis = self.analyze_wear_leveling(data, &patterns);
+        let memory_map = self.generate_memory_map(data, &patterns, &filesystems);
         
         let summary = self.generate_summary(
             &patterns, 
@@ -176,6 +429,25 @@ impl AiAnalyzer {
             encryption_probability,
             compression_probability,
             summary,
+            filesystems,
+            oob_analysis,
+            key_candidates,
+            wear_analysis,
+            memory_map,
+        }
+    }
+
+    /// Perform extended v1.4 analysis with timing
+    pub fn analyze_v14(&self, data: &[u8]) -> AiAnalysisResultV14 {
+        let start = std::time::Instant::now();
+        let base = self.analyze(data);
+        let elapsed = start.elapsed().as_millis() as u64;
+        
+        AiAnalysisResultV14 {
+            base,
+            version: "1.4.0".to_string(),
+            analysis_time_ms: elapsed,
+            deep_scan_enabled: self.deep_scan,
         }
     }
 
@@ -955,6 +1227,653 @@ impl AiAnalyzer {
         }
         
         parts.join(". ")
+    }
+
+    // ========================================================================
+    // v1.4: Filesystem Detection
+    // ========================================================================
+
+    /// Detect filesystems in dump data
+    pub fn detect_filesystems(&self, data: &[u8]) -> Vec<FilesystemInfo> {
+        let mut filesystems = Vec::new();
+        
+        let signatures: &[(&[u8], FilesystemType, &str)] = &[
+            // YAFFS2 - look for YAFFS object headers
+            (&[0x03, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00], FilesystemType::YAFFS2, "YAFFS2 object header"),
+            // UBIFS - magic number
+            (&[0x31, 0x18, 0x10, 0x06], FilesystemType::UBIFS, "UBIFS superblock"),
+            (&[0x06, 0x10, 0x18, 0x31], FilesystemType::UBIFS, "UBIFS superblock (BE)"),
+            // JFFS2 - magic
+            (&[0x85, 0x19], FilesystemType::JFFS2, "JFFS2 node"),
+            (&[0x19, 0x85], FilesystemType::JFFS2, "JFFS2 node (BE)"),
+            // SquashFS
+            (b"hsqs", FilesystemType::SquashFS, "SquashFS (LE)"),
+            (b"sqsh", FilesystemType::SquashFS, "SquashFS (BE)"),
+            // CramFS
+            (&[0x28, 0xCD, 0x3D, 0x45], FilesystemType::CramFS, "CramFS"),
+            // ext2/3/4 superblock at offset 0x438
+            (&[0x53, 0xEF], FilesystemType::Ext4, "ext2/3/4 superblock"),
+            // FAT
+            (b"FAT16", FilesystemType::FAT16, "FAT16 filesystem"),
+            (b"FAT32", FilesystemType::FAT32, "FAT32 filesystem"),
+            // NTFS
+            (b"NTFS", FilesystemType::NTFS, "NTFS filesystem"),
+            // F2FS
+            (&[0x10, 0x20, 0xF5, 0xF2], FilesystemType::F2FS, "F2FS superblock"),
+        ];
+        
+        // Scan for filesystem signatures
+        for offset in (0..data.len().saturating_sub(16)).step_by(self.page_size) {
+            for (sig, fs_type, desc) in signatures {
+                if offset + sig.len() <= data.len() && &data[offset..offset + sig.len()] == *sig {
+                    let mut details = HashMap::new();
+                    details.insert("signature".to_string(), desc.to_string());
+                    
+                    filesystems.push(FilesystemInfo {
+                        fs_type: fs_type.clone(),
+                        offset,
+                        size: None,
+                        confidence: Confidence::High,
+                        details,
+                    });
+                }
+                
+                // Also check at common superblock offsets
+                let superblock_offsets = [0x400, 0x438, 0x1000];
+                for &sb_off in &superblock_offsets {
+                    let check_offset = offset + sb_off;
+                    if check_offset + sig.len() <= data.len() 
+                        && &data[check_offset..check_offset + sig.len()] == *sig 
+                    {
+                        let mut details = HashMap::new();
+                        details.insert("signature".to_string(), desc.to_string());
+                        details.insert("superblock_offset".to_string(), format!("0x{:X}", sb_off));
+                        
+                        filesystems.push(FilesystemInfo {
+                            fs_type: fs_type.clone(),
+                            offset: check_offset,
+                            size: None,
+                            confidence: Confidence::High,
+                            details,
+                        });
+                    }
+                }
+            }
+        }
+        
+        // Deduplicate nearby detections
+        filesystems.sort_by_key(|f| f.offset);
+        filesystems.dedup_by(|a, b| a.fs_type == b.fs_type && (a.offset as i64 - b.offset as i64).abs() < 4096);
+        
+        filesystems
+    }
+
+    // ========================================================================
+    // v1.4: OOB/Spare Area Analysis
+    // ========================================================================
+
+    /// Analyze OOB/spare area structure
+    pub fn analyze_oob(&self, data: &[u8]) -> Option<OobAnalysis> {
+        if data.len() < self.page_size + self.oob_size {
+            return None;
+        }
+        
+        // Sample several pages to analyze OOB structure
+        let mut ecc_patterns: HashMap<(usize, usize), usize> = HashMap::new();
+        let mut bbm_positions: HashMap<usize, usize> = HashMap::new();
+        
+        let page_with_oob = self.page_size + self.oob_size;
+        let sample_count = (data.len() / page_with_oob).min(100);
+        
+        for i in 0..sample_count {
+            let page_start = i * page_with_oob;
+            if page_start + page_with_oob > data.len() {
+                break;
+            }
+            
+            let oob = &data[page_start + self.page_size..page_start + page_with_oob];
+            
+            // Detect bad block marker position (usually 0x00 or != 0xFF at specific offset)
+            for (pos, &byte) in oob.iter().enumerate() {
+                if byte != 0xFF {
+                    *bbm_positions.entry(pos).or_insert(0) += 1;
+                }
+            }
+            
+            // Detect ECC data regions (high entropy areas in OOB)
+            for start in (0..self.oob_size).step_by(4) {
+                let end = (start + 16).min(self.oob_size);
+                let chunk = &oob[start..end];
+                let entropy = self.calculate_entropy(chunk);
+                
+                if entropy > 4.0 {
+                    *ecc_patterns.entry((start, end - start)).or_insert(0) += 1;
+                }
+            }
+        }
+        
+        // Determine most likely ECC region
+        let ecc_region = ecc_patterns.iter()
+            .max_by_key(|(_, count)| *count)
+            .map(|((offset, size), _)| (*offset, *size));
+        
+        // Determine bad block marker position
+        let bbm_offset = bbm_positions.iter()
+            .filter(|(_, count)| **count < sample_count / 10) // BBM should be rare
+            .min_by_key(|(pos, _)| *pos)
+            .map(|(pos, _)| *pos)
+            .unwrap_or(0);
+        
+        // Estimate ECC scheme based on ECC size
+        let (ecc_offset, ecc_size) = ecc_region.unwrap_or((0, 0));
+        let ecc_scheme = match ecc_size {
+            0..=3 => EccScheme::None,
+            4..=7 => EccScheme::Hamming,
+            8..=15 => EccScheme::BCH4,
+            16..=31 => EccScheme::BCH8,
+            32..=63 => EccScheme::BCH16,
+            64..=127 => EccScheme::BCH24,
+            _ => EccScheme::BCH40,
+        };
+        
+        Some(OobAnalysis {
+            oob_size: self.oob_size,
+            ecc_scheme,
+            ecc_offset,
+            ecc_size,
+            bad_block_marker_offset: bbm_offset,
+            user_data_offset: ecc_offset + ecc_size,
+            user_data_size: self.oob_size.saturating_sub(ecc_offset + ecc_size + 2),
+            confidence: if sample_count > 10 { Confidence::High } else { Confidence::Medium },
+        })
+    }
+
+    // ========================================================================
+    // v1.4: Encryption Key Search
+    // ========================================================================
+
+    /// Search for potential encryption keys in dump
+    pub fn search_encryption_keys(&self, data: &[u8]) -> Vec<KeyCandidate> {
+        let mut candidates = Vec::new();
+        
+        // Common key lengths
+        let key_lengths = [16, 24, 32, 48, 64]; // AES-128, AES-192, AES-256, etc.
+        
+        // Scan for high-entropy regions that could be keys
+        for offset in (0..data.len().saturating_sub(64)).step_by(16) {
+            for &key_len in &key_lengths {
+                if offset + key_len > data.len() {
+                    continue;
+                }
+                
+                let potential_key = &data[offset..offset + key_len];
+                let entropy = self.calculate_entropy(potential_key);
+                
+                // Keys typically have very high entropy (> 7.0)
+                if entropy > 7.2 {
+                    // Check surrounding context
+                    let context = self.get_key_context(data, offset, key_len);
+                    
+                    // Determine key type based on context and patterns
+                    let key_type = self.identify_key_type(data, offset, key_len);
+                    
+                    if !key_type.is_empty() {
+                        candidates.push(KeyCandidate {
+                            offset,
+                            key_type,
+                            key_length: key_len,
+                            entropy,
+                            confidence: Confidence::from_score((entropy - 7.0) as f32 / 1.0),
+                            context,
+                        });
+                    }
+                }
+            }
+        }
+        
+        // Limit results and sort by confidence
+        candidates.sort_by(|a, b| b.entropy.partial_cmp(&a.entropy).unwrap_or(std::cmp::Ordering::Equal));
+        candidates.truncate(50);
+        
+        candidates
+    }
+
+    fn get_key_context(&self, data: &[u8], offset: usize, key_len: usize) -> String {
+        let start = offset.saturating_sub(32);
+        let end = (offset + key_len + 32).min(data.len());
+        
+        // Look for readable strings nearby
+        let context_data = &data[start..end];
+        let printable: String = context_data.iter()
+            .filter(|&&b| (0x20..=0x7E).contains(&b))
+            .take(32)
+            .map(|&b| b as char)
+            .collect();
+        
+        if printable.len() > 4 {
+            format!("Near: \"{}\"", printable)
+        } else {
+            format!("Offset 0x{:X}", offset)
+        }
+    }
+
+    fn identify_key_type(&self, data: &[u8], offset: usize, key_len: usize) -> String {
+        // Check for common key storage patterns
+        let before = if offset >= 16 { &data[offset - 16..offset] } else { &[] };
+        
+        // Look for common key identifiers
+        let identifiers: &[(&[u8], &str)] = &[
+            (b"AES", "AES Key"),
+            (b"RSA", "RSA Key"),
+            (b"KEY", "Generic Key"),
+            (b"key", "Generic Key"),
+            (b"SEC", "Secret Key"),
+            (b"ENC", "Encryption Key"),
+            (b"DEC", "Decryption Key"),
+        ];
+        
+        for (pattern, name) in identifiers {
+            if before.windows(pattern.len()).any(|w| w == *pattern) {
+                return format!("{} ({} bytes)", name, key_len);
+            }
+        }
+        
+        // Classify by key length
+        match key_len {
+            16 => "Potential AES-128 Key".to_string(),
+            24 => "Potential AES-192 Key".to_string(),
+            32 => "Potential AES-256 Key".to_string(),
+            _ => String::new(),
+        }
+    }
+
+    // ========================================================================
+    // v1.4: Dump Comparison
+    // ========================================================================
+
+    /// Compare two dumps and find differences
+    pub fn compare_dumps(&self, dump1: &[u8], dump2: &[u8]) -> DumpDiff {
+        let mut changed_pages = Vec::new();
+        let mut changed_blocks = Vec::new();
+        let mut modified_regions = Vec::new();
+        let mut total_differences = 0usize;
+        
+        let min_len = dump1.len().min(dump2.len());
+        let max_len = dump1.len().max(dump2.len());
+        
+        // Compare page by page
+        let num_pages = min_len / self.page_size;
+        for page in 0..num_pages {
+            let start = page * self.page_size;
+            let end = start + self.page_size;
+            
+            let page1 = &dump1[start..end];
+            let page2 = &dump2[start..end];
+            
+            if page1 != page2 {
+                changed_pages.push(page);
+                
+                // Count byte differences
+                let diff_count = page1.iter().zip(page2.iter())
+                    .filter(|(a, b)| a != b)
+                    .count();
+                total_differences += diff_count;
+                
+                // Classify change type
+                let change_type = if page2.iter().all(|&b| b == 0xFF) {
+                    DiffChangeType::Erased
+                } else if diff_count < 10 {
+                    DiffChangeType::BitFlip
+                } else {
+                    DiffChangeType::Modified
+                };
+                
+                modified_regions.push(DiffRegion {
+                    offset: start,
+                    size: self.page_size,
+                    change_type,
+                    description: format!("Page {} changed ({} bytes different)", page, diff_count),
+                });
+            }
+        }
+        
+        // Identify changed blocks
+        let pages_per_block = self.block_size;
+        for block in 0..(num_pages / pages_per_block) {
+            let block_start = block * pages_per_block;
+            let block_end = block_start + pages_per_block;
+            
+            if changed_pages.iter().any(|&p| p >= block_start && p < block_end) {
+                changed_blocks.push(block);
+            }
+        }
+        
+        // Handle size differences
+        let added_regions = if dump2.len() > dump1.len() {
+            vec![(dump1.len(), dump2.len())]
+        } else {
+            vec![]
+        };
+        
+        let removed_regions = if dump1.len() > dump2.len() {
+            vec![(dump2.len(), dump1.len())]
+        } else {
+            vec![]
+        };
+        
+        // Calculate similarity
+        let same_bytes = min_len - total_differences;
+        let similarity_percent = (same_bytes as f32 / max_len as f32) * 100.0;
+        
+        DumpDiff {
+            total_differences,
+            changed_pages,
+            changed_blocks,
+            added_regions,
+            removed_regions,
+            modified_regions,
+            similarity_percent,
+        }
+    }
+
+    // ========================================================================
+    // v1.4: Wear Leveling Analysis
+    // ========================================================================
+
+    /// Analyze wear leveling patterns
+    pub fn analyze_wear_leveling(&self, data: &[u8], patterns: &[DetectedPattern]) -> Option<WearAnalysis> {
+        let block_bytes = self.page_size * self.block_size;
+        let num_blocks = data.len() / block_bytes;
+        
+        if num_blocks < 4 {
+            return None;
+        }
+        
+        let mut erase_estimates: Vec<(usize, u32)> = Vec::new();
+        let mut block_entropies: Vec<(usize, f64)> = Vec::new();
+        
+        for block in 0..num_blocks {
+            let start = block * block_bytes;
+            let end = (start + block_bytes).min(data.len());
+            let block_data = &data[start..end];
+            
+            // Estimate erase count based on various heuristics
+            let entropy = self.calculate_entropy(block_data);
+            let ff_ratio = block_data.iter().filter(|&&b| b == 0xFF).count() as f32 / block_data.len() as f32;
+            
+            // Blocks with more varied data have likely been erased more
+            let estimated_erases = if ff_ratio > 0.99 {
+                // Empty block - could be fresh or heavily used and erased
+                100
+            } else if entropy > 7.0 {
+                // High entropy - likely encrypted/compressed, moderate use
+                500
+            } else {
+                // Normal data - estimate based on entropy
+                ((entropy * 100.0) as u32).max(50)
+            };
+            
+            erase_estimates.push((block, estimated_erases));
+            block_entropies.push((block, entropy));
+        }
+        
+        // Sort to find hottest/coldest blocks
+        let mut sorted_by_erases = erase_estimates.clone();
+        sorted_by_erases.sort_by_key(|(_, e)| std::cmp::Reverse(*e));
+        
+        let hottest_blocks: Vec<usize> = sorted_by_erases.iter().take(10).map(|(b, _)| *b).collect();
+        let coldest_blocks: Vec<usize> = sorted_by_erases.iter().rev().take(10).map(|(b, _)| *b).collect();
+        
+        // Calculate distribution stats
+        let erases: Vec<u32> = erase_estimates.iter().map(|(_, e)| *e).collect();
+        let min_erases = *erases.iter().min().unwrap_or(&0);
+        let max_erases = *erases.iter().max().unwrap_or(&0);
+        let avg_erases = erases.iter().sum::<u32>() as f32 / erases.len() as f32;
+        
+        let variance = erases.iter()
+            .map(|&e| (e as f32 - avg_erases).powi(2))
+            .sum::<f32>() / erases.len() as f32;
+        let std_deviation = variance.sqrt();
+        
+        // Estimate remaining life (rough heuristic)
+        // Typical NAND endurance: 3000-100000 P/E cycles
+        let typical_endurance = 10000u32;
+        let remaining_life = ((typical_endurance.saturating_sub(max_erases)) as f32 / typical_endurance as f32) * 100.0;
+        
+        // Generate recommendations
+        let mut recommendations = Vec::new();
+        
+        if std_deviation > avg_erases * 0.5 {
+            recommendations.push("High wear variance detected. Consider enabling wear leveling.".to_string());
+        }
+        
+        if max_erases > typical_endurance / 2 {
+            recommendations.push("Some blocks show significant wear. Monitor for failures.".to_string());
+        }
+        
+        if hottest_blocks.len() < 5 && max_erases > 1000 {
+            recommendations.push("Wear concentrated in few blocks. Check for hot data patterns.".to_string());
+        }
+        
+        Some(WearAnalysis {
+            estimated_erase_counts: erase_estimates,
+            hottest_blocks,
+            coldest_blocks,
+            wear_distribution: WearDistribution {
+                min_erases,
+                max_erases,
+                avg_erases,
+                std_deviation,
+            },
+            estimated_remaining_life_percent: remaining_life.max(0.0).min(100.0),
+            recommendations,
+        })
+    }
+
+    // ========================================================================
+    // v1.4: Memory Map Generation
+    // ========================================================================
+
+    /// Generate a visual memory map
+    pub fn generate_memory_map(
+        &self, 
+        data: &[u8], 
+        patterns: &[DetectedPattern],
+        filesystems: &[FilesystemInfo],
+    ) -> Option<MemoryMap> {
+        if data.is_empty() {
+            return None;
+        }
+        
+        let mut regions: Vec<MemoryMapRegion> = Vec::new();
+        
+        // Convert patterns to regions
+        for pattern in patterns {
+            let (region_type, color) = match pattern.pattern_type {
+                PatternType::Empty => ("Empty", "#333333"),
+                PatternType::Zeroed => ("Zeroed", "#222222"),
+                PatternType::Encrypted => ("Encrypted", "#ff4444"),
+                PatternType::Compressed => ("Compressed", "#44ff44"),
+                PatternType::Executable => ("Executable", "#4444ff"),
+                PatternType::Text => ("Text", "#ffff44"),
+                PatternType::BootLoader => ("Bootloader", "#ff8800"),
+                PatternType::Kernel => ("Kernel", "#8844ff"),
+                PatternType::DeviceTree => ("Device Tree", "#44ffff"),
+                PatternType::ConfigData => ("Config", "#ff44ff"),
+                PatternType::Repeating => ("Repeating", "#888888"),
+                PatternType::StructuredBinary => ("Binary", "#aaaaaa"),
+                _ => ("Data", "#666666"),
+            };
+            
+            regions.push(MemoryMapRegion {
+                start: pattern.start_offset,
+                end: pattern.end_offset,
+                region_type: region_type.to_string(),
+                name: pattern.description.clone(),
+                description: format!("{} ({} bytes)", region_type, pattern.end_offset - pattern.start_offset),
+                color: color.to_string(),
+            });
+        }
+        
+        // Add filesystem regions
+        for fs in filesystems {
+            regions.push(MemoryMapRegion {
+                start: fs.offset,
+                end: fs.offset + fs.size.unwrap_or(self.page_size * 16),
+                region_type: "Filesystem".to_string(),
+                name: fs.fs_type.name().to_string(),
+                description: format!("{} filesystem at 0x{:X}", fs.fs_type.name(), fs.offset),
+                color: "#00ff88".to_string(),
+            });
+        }
+        
+        // Detect partitions (simplified)
+        let partitions = self.detect_partitions(data, patterns);
+        
+        Some(MemoryMap {
+            total_size: data.len(),
+            regions,
+            filesystems: filesystems.to_vec(),
+            partitions,
+        })
+    }
+
+    fn detect_partitions(&self, data: &[u8], patterns: &[DetectedPattern]) -> Vec<PartitionInfo> {
+        let mut partitions = Vec::new();
+        
+        // Look for common partition table signatures
+        // MTD partition table
+        if data.len() >= 16 && &data[0..4] == b"MTDP" {
+            // Parse MTD partition table
+            partitions.push(PartitionInfo {
+                name: "MTD Partitions".to_string(),
+                offset: 0,
+                size: self.page_size,
+                fs_type: None,
+            });
+        }
+        
+        // Look for U-Boot environment
+        for offset in (0..data.len().saturating_sub(4)).step_by(self.page_size) {
+            if &data[offset..offset + 4] == [0x27, 0x05, 0x19, 0x56] {
+                partitions.push(PartitionInfo {
+                    name: "U-Boot Image".to_string(),
+                    offset,
+                    size: self.page_size * 64, // Estimate
+                    fs_type: None,
+                });
+            }
+        }
+        
+        // Infer partitions from pattern boundaries
+        let mut prev_end = 0;
+        for (i, pattern) in patterns.iter().enumerate() {
+            if pattern.start_offset > prev_end + self.page_size * 16 {
+                // Gap detected - might be partition boundary
+                partitions.push(PartitionInfo {
+                    name: format!("Partition {}", i),
+                    offset: prev_end,
+                    size: pattern.start_offset - prev_end,
+                    fs_type: None,
+                });
+            }
+            prev_end = pattern.end_offset;
+        }
+        
+        partitions
+    }
+
+    // ========================================================================
+    // v1.4: Report Export
+    // ========================================================================
+
+    /// Generate a comprehensive analysis report
+    pub fn generate_report(&self, result: &AiAnalysisResult) -> String {
+        let mut report = String::new();
+        
+        report.push_str("# OpenFlash AI Analysis Report v1.4\n\n");
+        report.push_str(&format!("## Summary\n{}\n\n", result.summary));
+        
+        report.push_str("## Metrics\n");
+        report.push_str(&format!("- Data Quality: {:.1}%\n", result.data_quality_score * 100.0));
+        report.push_str(&format!("- Encryption Probability: {:.1}%\n", result.encryption_probability * 100.0));
+        report.push_str(&format!("- Compression Probability: {:.1}%\n\n", result.compression_probability * 100.0));
+        
+        report.push_str("## Detected Patterns\n");
+        for pattern in &result.patterns {
+            report.push_str(&format!(
+                "- **{:?}** at 0x{:X}-0x{:X} ({} bytes) - {}\n",
+                pattern.pattern_type,
+                pattern.start_offset,
+                pattern.end_offset,
+                pattern.end_offset - pattern.start_offset,
+                pattern.description
+            ));
+        }
+        report.push('\n');
+        
+        if !result.filesystems.is_empty() {
+            report.push_str("## Detected Filesystems\n");
+            for fs in &result.filesystems {
+                report.push_str(&format!(
+                    "- **{}** at 0x{:X} (confidence: {:?})\n",
+                    fs.fs_type.name(),
+                    fs.offset,
+                    fs.confidence
+                ));
+            }
+            report.push('\n');
+        }
+        
+        if !result.anomalies.is_empty() {
+            report.push_str("## Anomalies\n");
+            for anomaly in &result.anomalies {
+                report.push_str(&format!(
+                    "- **{:?}**: {} → {}\n",
+                    anomaly.severity,
+                    anomaly.description,
+                    anomaly.recommendation
+                ));
+            }
+            report.push('\n');
+        }
+        
+        if !result.recovery_suggestions.is_empty() {
+            report.push_str("## Recovery Suggestions\n");
+            for suggestion in &result.recovery_suggestions {
+                report.push_str(&format!(
+                    "{}. **{}** ({:.0}% success) - {}\n",
+                    suggestion.priority,
+                    suggestion.action,
+                    suggestion.estimated_success * 100.0,
+                    suggestion.description
+                ));
+            }
+            report.push('\n');
+        }
+        
+        if let Some(ref oob) = result.oob_analysis {
+            report.push_str("## OOB Analysis\n");
+            report.push_str(&format!("- OOB Size: {} bytes\n", oob.oob_size));
+            report.push_str(&format!("- ECC Scheme: {:?}\n", oob.ecc_scheme));
+            report.push_str(&format!("- ECC Offset: {} ({} bytes)\n", oob.ecc_offset, oob.ecc_size));
+            report.push_str(&format!("- Bad Block Marker: offset {}\n\n", oob.bad_block_marker_offset));
+        }
+        
+        if let Some(ref wear) = result.wear_analysis {
+            report.push_str("## Wear Analysis\n");
+            report.push_str(&format!("- Estimated Remaining Life: {:.1}%\n", wear.estimated_remaining_life_percent));
+            report.push_str(&format!("- Erase Count Range: {} - {}\n", 
+                wear.wear_distribution.min_erases, 
+                wear.wear_distribution.max_erases));
+            report.push_str(&format!("- Average Erases: {:.1}\n", wear.wear_distribution.avg_erases));
+            for rec in &wear.recommendations {
+                report.push_str(&format!("- ⚠️ {}\n", rec));
+            }
+            report.push('\n');
+        }
+        
+        report
     }
 }
 

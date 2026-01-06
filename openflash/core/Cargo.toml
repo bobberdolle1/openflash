@@ -1,7 +1,9 @@
 [package]
 name = "openflash-core"
-version = "0.1.0"
+version = "1.4.0"
 edition = "2021"
+description = "Core library for OpenFlash NAND/eMMC programmer"
+license = "MIT"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }

@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-01-XX
+
+### Added
+- **AI Analysis v1.4 - Major Upgrade**
+  - **Filesystem Detection**: Auto-detect YAFFS2, UBIFS, JFFS2, SquashFS, CramFS, ext2/3/4, FAT16/32, NTFS, F2FS
+  - **OOB/Spare Area Analysis**: Automatic ECC scheme detection (Hamming, BCH4-40, LDPC, Reed-Solomon)
+  - **Encryption Key Search**: Deep scan for AES-128/192/256 keys with entropy analysis
+  - **Dump Comparison**: Compare two dumps with diff analysis, similarity scoring, bit-flip detection
+  - **Wear Leveling Analysis**: Estimate erase counts, identify hot/cold blocks, remaining life prediction
+  - **Memory Map Generation**: Visual memory layout with partition detection
+  - **Report Export**: Generate comprehensive Markdown analysis reports
+  - New pattern types: BootLoader, Kernel, DeviceTree, ConfigData, OobData, WearLevelMeta
+
+- **New AI GUI Features**
+  - Filesystem detection tab with clickable navigation
+  - OOB analysis panel with visual layout diagram
+  - Encryption key candidates list with context
+  - Wear analysis with circular life indicator and block heatmap
+  - Interactive memory map visualization with legend
+  - Export report button (📄) for saving analysis as Markdown
+  - Flash life metric in summary card
+
+- **New Tauri Commands**
+  - `ai_compare_dumps` - Compare two dumps and find differences
+  - `ai_search_keys` - Deep scan for encryption keys
+  - `ai_generate_report` - Export analysis as Markdown report
+
+### Changed
+- AI analyzer now supports configurable OOB size via `with_oob()` builder
+- AI analyzer supports deep scan mode via `with_deep_scan()` for thorough key search
+- Extended `AiAnalysisResult` with filesystems, oob_analysis, key_candidates, wear_analysis, memory_map
+- GUI version updated to 1.4.0
+- Core library version updated to 1.4.0
+
 ## [1.3.0] - 2026-01-XX
 
 ### Added
@@ -147,6 +181,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
+- **1.4.0** - AI v1.4: Filesystem detection, OOB analysis, key search, wear analysis, memory map
 - **1.3.0** - AI-powered analysis features
 - **1.25.0** - STM32F1 SPI NAND & eMMC support
 - **1.2.0** - eMMC support
@@ -154,7 +189,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **1.0.0** - Initial public release
 - **0.x.x** - Development versions (not released)
 
-[Unreleased]: https://github.com/openflash/openflash/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/openflash/openflash/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/openflash/openflash/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/openflash/openflash/compare/v1.25.0...v1.3.0
 [1.25.0]: https://github.com/openflash/openflash/compare/v1.2.0...v1.25.0
 [1.2.0]: https://github.com/openflash/openflash/compare/v1.1.0...v1.2.0

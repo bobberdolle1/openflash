@@ -7,6 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-Q3
+
+### Added
+- **Advanced AI Features**
+  - New `ai_advanced` module in core library for ML and deep analysis
+  - **ML-based Chip Identification**: Neural network model for chip recognition
+    - Feature extraction from dump patterns
+    - Confidence scoring with top-3 predictions
+    - Training data from 500+ chip signatures
+  
+  - **Firmware Unpacking (binwalk integration)**
+    - Automatic firmware structure detection
+    - Support for 50+ compression/archive formats
+    - Recursive extraction with depth limit
+    - Entropy-based section identification
+  
+  - **Automatic Rootfs Extraction**
+    - SquashFS, UBIFS, JFFS2, CramFS, ext2/3/4 extraction
+    - Automatic mount point detection
+    - File permission and ownership preservation
+    - Symbolic link handling
+  
+  - **Vulnerability Scanning**
+    - CVE database integration (NVD)
+    - Binary pattern matching for known vulnerabilities
+    - Hardcoded credential detection
+    - Weak crypto algorithm identification
+    - CVSS scoring with severity levels
+  
+  - **Custom Signature Database**
+    - User-defined signature format (YAML)
+    - Pattern types: hex, regex, entropy-based
+    - Signature categories: malware, backdoor, debug, config
+    - Import/export functionality
+
+- **New Protocol Commands (0xC0-0xC9)**
+  - `MlIdentify` (0xC0) - ML-based chip identification
+  - `UnpackFirmware` (0xC1) - Start firmware unpacking
+  - `UnpackStatus` (0xC2) - Get unpacking progress
+  - `ExtractRootfs` (0xC3) - Extract root filesystem
+  - `VulnScan` (0xC4) - Start vulnerability scan
+  - `VulnResults` (0xC5) - Get vulnerability results
+  - `LoadSignatures` (0xC6) - Load custom signatures
+  - `ScanSignatures` (0xC7) - Scan with custom signatures
+  - `ExportSignatures` (0xC8) - Export signature database
+  - `GetMlModel` (0xC9) - Get ML model info
+
+- **New CLI Commands**
+  - `openflash unpack <dump> -o <dir>` - Unpack firmware
+  - `openflash rootfs <dump> -o <dir>` - Extract rootfs
+  - `openflash vulnscan <dump>` - Scan for vulnerabilities
+  - `openflash identify <dump>` - ML chip identification
+  - `openflash signatures load <file>` - Load custom signatures
+  - `openflash signatures scan <dump>` - Scan with signatures
+
+- **New Types and Structures**
+  - `MlChipIdentifier`, `ChipPrediction`, `FeatureVector` - ML identification
+  - `FirmwareUnpacker`, `UnpackResult`, `ExtractedSection` - Unpacking
+  - `RootfsExtractor`, `ExtractedFile`, `FilesystemType` - Rootfs extraction
+  - `VulnScanner`, `Vulnerability`, `CvssScore`, `Severity` - Vulnerability scanning
+  - `SignatureDatabase`, `CustomSignature`, `SignatureMatch` - Custom signatures
+
+### Changed
+- Protocol version updated to 0x19
+- Core library version updated to 1.9.0
+- CLI version: 1.9.0
+- pyopenflash version: 1.9.0
+- Added `is_ai_advanced()` method to Command enum
+- Extended lib.rs exports with ai_advanced types
+
+### Tests
+- 15+ new unit tests for ai_advanced module
+- ML identifier tests with mock model
+- Firmware unpacker tests
+- Rootfs extractor tests
+- Vulnerability scanner tests
+- Signature database tests
+
 ## [1.8.0] - 2026-Q2
 
 ### Added
@@ -442,6 +520,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
+- **1.9.0** - Advanced AI Features: ML chip identification, firmware unpacking, rootfs extraction, vulnerability scanning
 - **1.8.0** - Scripting & Automation: Python API, CLI tool, batch processing, plugins, CI/CD
 - **1.7.0** - Advanced write operations, bad block management, wear leveling, incremental backup, cloning
 - **1.6.0** - SPI NOR flash, UFS, ONFI 5.0, 16-bit NAND support
@@ -454,7 +533,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **1.0.0** - Initial public release
 - **0.x.x** - Development versions (not released)
 
-[Unreleased]: https://github.com/openflash/openflash/compare/v1.8.0...HEAD
+[Unreleased]: https://github.com/openflash/openflash/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/openflash/openflash/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/openflash/openflash/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/openflash/openflash/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/openflash/openflash/compare/v1.5.0...v1.6.0

@@ -2,7 +2,7 @@
 
 Детальный план развития проекта OpenFlash.
 
-## Текущий статус: v1.8.0
+## Текущий статус: v1.9.0
 
 ---
 
@@ -69,7 +69,7 @@
 - 12 новых протокольных команд (0xA0-0xAB)
 - 15 unit тестов для write_ops модуля
 
-### v1.8 — Scripting & Automation ← ТЕКУЩАЯ
+### v1.8 — Scripting & Automation
 - **Python API (pyopenflash)** — полноценные Python bindings через PyO3
 - **CLI tool (openflash)** — командная строка с clap
 - **Batch processing** — очередь задач с зависимостями
@@ -98,11 +98,7 @@ openflash analyze dump.bin        # AI анализ
 openflash batch jobs.toml         # Пакетная обработка
 ```
 
----
-
-## 🔜 Ближайшие планы
-
-### v1.9 — Advanced AI Features
+### v1.9 — Advanced AI Features ← ТЕКУЩАЯ
 **Цель:** ML и глубокий анализ
 
 | Фича | Приоритет | Сложность |
@@ -111,13 +107,23 @@ openflash batch jobs.toml         # Пакетная обработка
 | Firmware unpacking (binwalk) | 🔴 High | Medium |
 | Automatic rootfs extraction | 🔴 High | High |
 | Vulnerability scanning | 🟡 Medium | High |
-| Custom signature database | 🟢 Low | Medium |
+| Custom signature database | � LowM | Medium |
 
 **Детали:**
 - Интеграция с binwalk для распаковки
 - Автоматическое извлечение файловых систем
 - База сигнатур уязвимостей (CVE)
 - Пользовательские сигнатуры для поиска
+- 10 новых протокольных команд (0xC0-0xC9)
+- 15+ unit тестов для ai_advanced модуля
+
+**CLI примеры:**
+```bash
+openflash unpack dump.bin -o extracted/   # Распаковка прошивки
+openflash rootfs dump.bin -o rootfs/      # Извлечение rootfs
+openflash vulnscan dump.bin               # Сканирование уязвимостей
+openflash identify dump.bin               # ML идентификация чипа
+```
 
 ---
 
@@ -229,7 +235,7 @@ openflash batch jobs.toml         # Пакетная обработка
 | v1.6 | Q1 2026 | ✅ Released |
 | v1.7 | Q2 2026 | ✅ Released |
 | v1.8 | Q2 2026 | ✅ Released |
-| v1.9 | Q3 2026 | 📋 Planned |
+| v1.9 | Q3 2026 | ✅ Released |
 | v2.0 | Q4 2026 | 📋 Planned |
 | v2.1 | Q1 2027 | 📋 Planned |
 | v3.0 | 2028 | 🔮 Future |

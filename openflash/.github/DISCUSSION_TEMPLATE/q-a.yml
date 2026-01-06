@@ -1,0 +1,41 @@
+title: "[Question] "
+labels:
+  - question
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before asking, please check:
+        - [FAQ](https://github.com/openflash/openflash/wiki/FAQ)
+        - [Troubleshooting](https://github.com/openflash/openflash/wiki/Troubleshooting)
+        - Existing discussions
+        
+  - type: textarea
+    id: question
+    attributes:
+      label: Your Question
+      description: What would you like to know?
+    validations:
+      required: true
+      
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - Installation / Setup
+        - Hardware / Wiring
+        - Software / GUI
+        - Firmware
+        - NAND Chips
+        - Other
+    validations:
+      required: true
+      
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any relevant details (OS, hardware, etc.)
+    validations:
+      required: false

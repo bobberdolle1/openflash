@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # Core library tests
+  test-core:
+    name: Test Core Library
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+        
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            openflash/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          
+      - name: Run tests
+        working-directory: openflash
+        run: cargo test -p openflash-core --verbose
+
+  # Check GUI backend compiles
+  check-gui:
+    name: Check GUI Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+        
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libudev-dev
+          
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            openflash/target/
+          key: ${{ runner.os }}-cargo-gui-${{ hashFiles('**/Cargo.lock') }}
+          
+      - name: Check GUI backend
+        working-directory: openflash
+        run: cargo check -p openflash-gui
+
+  # Build frontend
+  build-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: openflash/gui/package-lock.json
+          
+      - name: Install dependencies
+        working-directory: openflash/gui
+        run: npm ci
+        
+      - name: Build frontend
+        working-directory: openflash/gui
+        run: npm run build
+        
+      - name: TypeScript check
+        working-directory: openflash/gui
+        run: npx tsc --noEmit
+
+  # Lint
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          components: clippy, rustfmt
+          
+      - name: Check formatting
+        working-directory: openflash
+        run: cargo fmt -p openflash-core -- --check
+        
+      - name: Clippy
+        working-directory: openflash
+        run: cargo clippy -p openflash-core -- -D warnings
+
+  # Security audit
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+      - name: Run audit
+        working-directory: openflash
+        run: cargo audit || true  # Don't fail on advisories for now

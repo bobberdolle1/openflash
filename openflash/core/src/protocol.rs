@@ -1,6 +1,9 @@
+//! USB Protocol definitions for OpenFlash
+//! Defines command packets for communication between host and firmware
+
 use serde::{Deserialize, Serialize};
 
-// USB Protocol Commands
+/// USB Protocol Commands
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Command {
@@ -30,17 +33,17 @@ impl Command {
     }
 }
 
-// Protocol packet structure (64 bytes as specified)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Protocol packet structure (64 bytes total)
+#[derive(Debug, Clone)]
 pub struct Packet {
     pub cmd: Command,
-    pub args: [u8; 63],  // 63 bytes for arguments after the command ID
+    pub args: [u8; 63],
 }
 
 impl Packet {
     pub fn new(cmd: Command, args: &[u8]) -> Self {
         let mut packet_args = [0u8; 63];
-        let copy_len = std::cmp::min(args.len(), 63);
+        let copy_len = args.len().min(63);
         packet_args[..copy_len].copy_from_slice(&args[..copy_len]);
         
         Self {
@@ -61,8 +64,7 @@ impl Packet {
             return None;
         }
 
-        let cmd_byte = bytes[0];
-        let cmd = Command::from_u8(cmd_byte)?;
+        let cmd = Command::from_u8(bytes[0])?;
         let mut args = [0u8; 63];
         args.copy_from_slice(&bytes[1..64]);
 
@@ -70,7 +72,7 @@ impl Packet {
     }
 }
 
-// Common NAND commands
+/// Common NAND commands
 pub mod nand_commands {
     pub const READ1: u8 = 0x00;
     pub const READ2: u8 = 0x30;
@@ -98,5 +100,11 @@ mod tests {
         assert_eq!(parsed.args[1], 0x02);
         assert_eq!(parsed.args[2], 0x03);
     }
-}
 
+    #[test]
+    fn test_command_from_u8() {
+        assert_eq!(Command::from_u8(0x01), Some(Command::Ping));
+        assert_eq!(Command::from_u8(0x07), Some(Command::ReadId));
+        assert_eq!(Command::from_u8(0xFF), None);
+    }
+}

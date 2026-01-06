@@ -3,28 +3,27 @@ name = "openflash-gui"
 version = "0.1.0"
 description = "OpenFlash Desktop Application"
 edition = "2021"
+rust-version = "1.77"
 
 [lib]
 name = "openflash_gui_lib"
-crate-type = ["lib", "cdylib"]
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2.0", features = ["api-all"] }
-tauri-plugin-shell = "2.0"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-tokio = { version = "1.0", features = ["full"] }
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
 openflash-core = { path = "../../core" }
-rusb = "0.9"
 nusb = "0.1"
-
-[dependencies.tauri]
-version = "2.0"
-features = ["api-all"]
+dirs = "5"
 
 [features]
-# by default Tauri runs in production mode
-# when `tauri dev` runs it is executed with `cargo run --features dev` which enables the dev feature
 default = ["custom-protocol"]
-dev = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]

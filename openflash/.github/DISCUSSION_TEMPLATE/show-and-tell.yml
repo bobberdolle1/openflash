@@ -1,0 +1,32 @@
+title: "[Show] "
+labels:
+  - show-and-tell
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share what you've built or accomplished with OpenFlash! 🎉
+        
+  - type: textarea
+    id: project
+    attributes:
+      label: What did you create?
+      description: Tell us about your project
+    validations:
+      required: true
+      
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Hardware used, challenges faced, lessons learned
+    validations:
+      required: false
+      
+  - type: textarea
+    id: images
+    attributes:
+      label: Images / Screenshots
+      description: Drag and drop images here
+    validations:
+      required: false

@@ -12,8 +12,7 @@ embassy-usb = "0.1"
 panic-probe = { version = "0.3", features = ["print-defmt"] }
 defmt = "0.3"
 defmt-rtt = "0.4"
-usb-device = "0.2"
-openflash-core = { path = "../core" }
+heapless = "0.8"
 
 [profile.dev]
 debug = 2

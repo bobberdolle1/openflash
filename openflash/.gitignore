@@ -1,0 +1,59 @@
+# Rust
+/target/
+**/target/
+Cargo.lock
+!openflash/Cargo.lock
+
+
+# Node
+node_modules/
+dist/
+*.log
+npm-debug.log*
+
+# Tauri
+/gui/src-tauri/target/
+/gui/src-tauri/WixTools/
+/gui/src-tauri/icons/*.ico
+/gui/src-tauri/icons/*.icns
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+*.uf2
+*.bin
+*.elf
+*.hex
+
+# Test artifacts
+*.dump
+*.raw
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+
+# Coverage
+coverage/
+*.lcov
+
+# Temporary
+tmp/
+temp/
+*.tmp
+.kiro

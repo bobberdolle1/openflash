@@ -1,0 +1,221 @@
+/* BitmapView Premium Styles */
+
+.bitmap-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+/* Header */
+.bitmap-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.875rem 1.25rem;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.bitmap-stats {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.bitmap-stats .stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.bitmap-stats .stat-value {
+  font-size: 1rem;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-primary);
+}
+
+.bitmap-stats .stat-label {
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.bitmap-zoom {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.625rem;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.bitmap-zoom .icon-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+}
+
+.bitmap-zoom .icon-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  transform: none;
+  box-shadow: none;
+}
+
+/* Content */
+.bitmap-content {
+  flex: 1;
+  overflow: auto;
+  padding: 1rem;
+  display: flex;
+  justify-content: center;
+  background: 
+    linear-gradient(45deg, var(--bg-dark) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--bg-dark) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--bg-dark) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--bg-dark) 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+  background-color: var(--bg-elevated);
+}
+
+.bitmap-canvas-container {
+  transition: transform 0.2s ease;
+}
+
+.bitmap-image {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  cursor: crosshair;
+  box-shadow: var(--shadow-lg);
+}
+
+.bitmap-image:hover {
+  border-color: var(--accent-primary);
+}
+
+/* Footer */
+.bitmap-footer {
+  padding: 0.875rem 1.25rem;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Legend */
+.bitmap-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.legend-color {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.legend-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6875rem;
+  padding: 0.125rem 0.375rem;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+}
+
+/* Page Info */
+.bitmap-info {
+  display: flex;
+  gap: 1rem;
+  min-height: 24px;
+}
+
+.page-info {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.375rem 0.75rem;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  font-size: 0.75rem;
+  border: 1px solid var(--border-subtle);
+}
+
+.page-info.hover {
+  border-color: var(--accent-primary);
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.page-info.selected {
+  border-color: var(--success);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.page-label {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.page-num {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.page-offset {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--accent-primary);
+  padding: 0.125rem 0.375rem;
+  background: var(--bg-dark);
+  border-radius: var(--radius-sm);
+}
+
+.page-entropy {
+  color: var(--text-secondary);
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .bitmap-header {
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: flex-start;
+  }
+  
+  .bitmap-legend {
+    gap: 0.625rem;
+  }
+  
+  .legend-item span:not(.legend-color):not(.legend-count) {
+    display: none;
+  }
+}

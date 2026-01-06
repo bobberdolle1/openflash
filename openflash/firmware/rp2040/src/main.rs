@@ -1,89 +1,157 @@
+//! OpenFlash RP2040 Firmware
+//! Minimal firmware for NAND flash operations via USB
+
 #![no_std]
 #![no_main]
 
 use defmt::*;
 use embassy_executor::Spawner;
 use embassy_rp::bind_interrupts;
+use embassy_rp::gpio::{Input, Output, Level, Pull, Flex};
 use embassy_rp::peripherals::USB;
 use embassy_rp::usb::{Driver, InterruptHandler};
 use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
 use embassy_usb::{Builder, Config};
-use embassy_time::{Duration, Timer};
 use {defmt_rtt as _, panic_probe as _};
 
 mod pio_nand;
 mod usb_handler;
 
+use pio_nand::{NandController, NandPins};
 use usb_handler::UsbHandler;
 
 bind_interrupts!(struct Irqs {
     USBCTRL_IRQ => InterruptHandler<USB>;
 });
 
+// USB descriptors storage
+static mut DEVICE_DESCRIPTOR: [u8; 256] = [0; 256];
+static mut CONFIG_DESCRIPTOR: [u8; 256] = [0; 256];
+static mut BOS_DESCRIPTOR: [u8; 256] = [0; 256];
+static mut CONTROL_BUF: [u8; 64] = [0; 64];
+static mut STATE: Option<State> = None;
+
+/// Pin assignments for NAND interface on Raspberry Pi Pico
+/// 
+/// Control signals:
+///   GP0  - CLE (Command Latch Enable)
+///   GP1  - ALE (Address Latch Enable)
+///   GP2  - WE# (Write Enable, active low)
+///   GP3  - RE# (Read Enable, active low)
+///   GP4  - CE# (Chip Enable, active low)
+///   GP5  - R/B# (Ready/Busy, active low = busy)
+///
+/// Data bus:
+///   GP6  - D0
+///   GP7  - D1
+///   GP8  - D2
+///   GP9  - D3
+///   GP10 - D4
+///   GP11 - D5
+///   GP12 - D6
+///   GP13 - D7
+///
+/// Optional:
+///   GP14 - WP# (Write Protect, active low)
+///   GP25 - LED (onboard)
+
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
-    info!("OpenFlash RP2040 Firmware Started");
+    info!("OpenFlash RP2040 Firmware v0.1.0");
 
-    // Create the driver, from the HAL
+    // Initialize LED for status indication
+    let mut led = Output::new(p.PIN_25, Level::Low);
+    led.set_high(); // LED on during init
+
+    // Initialize NAND control pins
+    let nand_pins = NandPins {
+        cle: Output::new(p.PIN_0, Level::Low),
+        ale: Output::new(p.PIN_1, Level::Low),
+        we: Output::new(p.PIN_2, Level::High),   // Active low, idle high
+        re: Output::new(p.PIN_3, Level::High),   // Active low, idle high
+        ce: Output::new(p.PIN_4, Level::High),   // Active low, idle high (disabled)
+        rb: Input::new(p.PIN_5, Pull::Up),       // Ready/Busy with pull-up
+        
+        // Data bus as flexible I/O
+        d0: Flex::new(p.PIN_6),
+        d1: Flex::new(p.PIN_7),
+        d2: Flex::new(p.PIN_8),
+        d3: Flex::new(p.PIN_9),
+        d4: Flex::new(p.PIN_10),
+        d5: Flex::new(p.PIN_11),
+        d6: Flex::new(p.PIN_12),
+        d7: Flex::new(p.PIN_13),
+    };
+
+    // Create NAND controller
+    let nand = NandController::new(nand_pins);
+    info!("NAND controller initialized");
+
+    // Create USB driver
     let driver = Driver::new(p.USB, Irqs);
 
-    // Create embassy-usb Config
-    let mut config = Config::new(0xc0de, 0xcafe);
+    // USB configuration
+    let mut config = Config::new(0xC0DE, 0xCAFE);
     config.manufacturer = Some("OpenFlash");
-    config.product = Some("OpenFlash RP2040");
-    config.serial_number = Some("12345678");
-    config.max_power = 100;
+    config.product = Some("OpenFlash NAND Programmer");
+    config.serial_number = Some("OF-RP2040-001");
+    config.max_power = 250; // 500mA
     config.max_packet_size_0 = 64;
-
-    // Required for windows compatibility
     config.composite_with_iads = true;
-    config.request_handler = None;
 
-    // Create embassy-usb DeviceBuilder using the driver and config
-    let mut device_descriptor = [0; 256];
-    let mut config_descriptor = [0; 256];
-    let mut bos_descriptor = [0; 256];
-    let mut control_buf = [0; 64];
-
-    let mut state = State::new();
+    // Safety: These statics are only accessed from this task
+    let (device_descriptor, config_descriptor, bos_descriptor, control_buf, state) = unsafe {
+        STATE = Some(State::new());
+        (
+            &mut DEVICE_DESCRIPTOR,
+            &mut CONFIG_DESCRIPTOR,
+            &mut BOS_DESCRIPTOR,
+            &mut CONTROL_BUF,
+            STATE.as_mut().unwrap(),
+        )
+    };
 
     let mut builder = Builder::new(
         driver,
         config,
-        &mut device_descriptor,
-        &mut config_descriptor,
-        &mut bos_descriptor,
-        &mut control_buf,
+        device_descriptor,
+        config_descriptor,
+        bos_descriptor,
+        control_buf,
     );
 
-    // Create classes on the builder
-    let mut class = CdcAcmClass::new(&mut builder, &mut state, 64);
+    // Create CDC ACM class for serial communication
+    let class = CdcAcmClass::new(&mut builder, state, 64);
 
-    // Build the builder
+    // Build USB device
     let usb = builder.build();
 
-    // Run the USB driver in a separate task
+    // Spawn USB task
     spawner.spawn(usb_task(usb)).unwrap();
 
-    // Create USB handler
-    let mut usb_handler = UsbHandler::new(class);
+    info!("USB initialized, waiting for connection...");
+    led.set_low(); // LED off, ready
 
-    // Main application loop - handle commands from USB
+    // Create command handler with NAND controller
+    let mut handler = UsbHandler::new(class, nand);
+
+    // Main loop
     loop {
         // Wait for USB connection
-        usb_handler.class.wait_connection().await;
-        info!("USB CDC connection established");
+        handler.class.wait_connection().await;
+        info!("Host connected");
+        led.set_high();
 
-        // Handle incoming commands
-        usb_handler.handle_commands().await;
-
-        // Small delay to prevent busy-waiting
-        Timer::after(Duration::from_millis(10)).await;
+        // Handle commands until disconnection
+        handler.handle_commands().await;
+        
+        info!("Host disconnected");
+        led.set_low();
     }
 }
 
 #[embassy_executor::task]
-async fn usb_task(mut usb: embassy_usb::UsbDevice<'static, Driver<'static, USB>>) {
-    usb.run().await;
+async fn usb_task(mut usb: embassy_usb::UsbDevice<'static, Driver<'static, USB>>) -> ! {
+    usb.run().await
 }

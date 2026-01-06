@@ -1,31 +1,79 @@
+//! USB command handler for OpenFlash RP2040 firmware
+
 use defmt::*;
 use embassy_time::Timer;
 use embassy_usb::class::cdc_acm::CdcAcmClass;
-use crate::pio_nand::NandFlashPio;
+use embassy_usb::driver::Driver;
 
-pub struct UsbHandler<'a> {
-    class: CdcAcmClass<'a>,
-    nand: NandFlashPio,
+use crate::pio_nand::NandController;
+
+const MAX_PAGE_SIZE: usize = 4352; // 4096 + 256 OOB
+const PACKET_SIZE: usize = 64;
+
+#[repr(u8)]
+#[derive(Debug, Clone, Copy)]
+pub enum Command {
+    Ping = 0x01,
+    BusConfig = 0x02,
+    NandCmd = 0x03,
+    NandAddr = 0x04,
+    NandReadPage = 0x05,
+    NandWritePage = 0x06,
+    ReadId = 0x07,
+    Reset = 0x08,
 }
 
-impl<'a> UsbHandler<'a> {
-    pub fn new(class: CdcAcmClass<'a>) -> Self {
+impl Command {
+    fn from_u8(val: u8) -> Option<Self> {
+        match val {
+            0x01 => Some(Command::Ping),
+            0x02 => Some(Command::BusConfig),
+            0x03 => Some(Command::NandCmd),
+            0x04 => Some(Command::NandAddr),
+            0x05 => Some(Command::NandReadPage),
+            0x06 => Some(Command::NandWritePage),
+            0x07 => Some(Command::ReadId),
+            0x08 => Some(Command::Reset),
+            _ => None,
+        }
+    }
+}
+
+#[repr(u8)]
+pub enum Status {
+    Ok = 0x00,
+    Error = 0x01,
+    UnknownCommand = 0xFF,
+}
+
+pub struct UsbHandler<'d, D: Driver<'d>> {
+    pub class: CdcAcmClass<'d, D>,
+    nand: NandController<'d>,
+    page_buffer: [u8; MAX_PAGE_SIZE],
+}
+
+impl<'d, D: Driver<'d>> UsbHandler<'d, D> {
+    pub fn new(class: CdcAcmClass<'d, D>, nand: NandController<'d>) -> Self {
         Self {
             class,
-            nand: NandFlashPio::new(),
+            nand,
+            page_buffer: [0xFF; MAX_PAGE_SIZE],
         }
     }
 
     pub async fn handle_commands(&mut self) {
-        let mut buf = [0; 64];
-        match self.class.read_packet(&mut buf).await {
-            Ok(n) => {
-                if n > 0 {
-                    self.process_command(&buf[..n]).await;
+        let mut cmd_buf = [0u8; PACKET_SIZE];
+        
+        loop {
+            match self.class.read_packet(&mut cmd_buf).await {
+                Ok(n) if n > 0 => {
+                    self.process_command(&cmd_buf[..n]).await;
                 }
-            }
-            Err(e) => {
-                warn!("USB read error: {:?}", e);
+                Ok(_) => {}
+                Err(_) => {
+                    warn!("USB connection lost");
+                    break;
+                }
             }
         }
     }
@@ -35,55 +83,157 @@ impl<'a> UsbHandler<'a> {
             return;
         }
 
-        let command = cmd_data[0];
-        let args = &cmd_data[1..];
+        let cmd_byte = cmd_data[0];
+        let args = if cmd_data.len() > 1 { &cmd_data[1..] } else { &[] };
 
-        match command {
-            0x01 => { // PING
-                let response = [0x01, 0x00]; // PONG
-                self.class.write_packet(&response).await.ok();
-            }
-            0x07 => { // READ_ID
-                // Simulate reading NAND ID
-                let id = [0xEC, 0xD7, 0x10, 0x95, 0x44]; // Samsung example
-                self.class.write_packet(&id).await.ok();
-            }
-            0x03 => { // NAND_CMD
-                if !args.is_empty() {
-                    self.nand.send_command(args[0]).await;
-                    let response = [0x03, 0x00]; // Command sent
-                    self.class.write_packet(&response).await.ok();
-                }
-            }
-            0x04 => { // NAND_ADDR
-                if !args.is_empty() {
-                    self.nand.send_address(args[0]).await;
-                    let response = [0x04, 0x00]; // Address sent
-                    self.class.write_packet(&response).await.ok();
-                }
-            }
-            0x05 => { // NAND_READ_PAGE
-                let size = if args.len() >= 4 {
-                    u32::from_le_bytes([args[0], args[1], args[2], args[3]]) as usize
-                } else {
-                    2048 // Default page size
-                };
-                
-                let data = self.nand.read_data(size).await;
-                // Send data back in chunks if needed
-                let mut offset = 0;
-                while offset < data.len() {
-                    let chunk_size = core::cmp::min(64, data.len() - offset);
-                    self.class.write_packet(&data[offset..offset + chunk_size]).await.ok();
-                    offset += chunk_size;
-                    Timer::after_millis(1).await; // Small delay
-                }
-            }
-            _ => {
-                warn!("Unknown command: 0x{:02X}", command);
-                let response = [0xFF, 0xFF]; // Unknown command
-                self.class.write_packet(&response).await.ok();
+        match Command::from_u8(cmd_byte) {
+            Some(Command::Ping) => self.handle_ping().await,
+            Some(Command::BusConfig) => self.handle_bus_config(args).await,
+            Some(Command::NandCmd) => self.handle_nand_cmd(args).await,
+            Some(Command::NandAddr) => self.handle_nand_addr(args).await,
+            Some(Command::NandReadPage) => self.handle_read_page(args).await,
+            Some(Command::NandWritePage) => self.handle_write_page(args).await,
+            Some(Command::ReadId) => self.handle_read_id().await,
+            Some(Command::Reset) => self.handle_reset().await,
+            None => {
+                warn!("Unknown command: 0x{:02X}", cmd_byte);
+                self.send_response(&[Status::UnknownCommand as u8]).await;
             }
         }
+    }
+
+    async fn handle_ping(&mut self) {
+        info!("PING");
+        self.send_response(&[Command::Ping as u8, Status::Ok as u8]).await;
+    }
+
+    async fn handle_bus_config(&mut self, args: &[u8]) {
+        if args.len() >= 4 {
+            // args[0..2] = timing mode
+            // args[2..4] = bus width (8/16)
+            info!("BUS_CONFIG");
+            self.send_response(&[Command::BusConfig as u8, Status::Ok as u8]).await;
+        } else {
+            self.send_response(&[Command::BusConfig as u8, Status::Error as u8]).await;
+        }
+    }
+
+    async fn handle_nand_cmd(&mut self, args: &[u8]) {
+        if !args.is_empty() {
+            let cmd = args[0];
+            info!("NAND_CMD: 0x{:02X}", cmd);
+            self.nand.send_command(cmd).await;
+            self.send_response(&[Command::NandCmd as u8, Status::Ok as u8]).await;
+        } else {
+            self.send_response(&[Command::NandCmd as u8, Status::Error as u8]).await;
+        }
+    }
+
+    async fn handle_nand_addr(&mut self, args: &[u8]) {
+        if !args.is_empty() {
+            let addr = args[0];
+            info!("NAND_ADDR: 0x{:02X}", addr);
+            self.nand.send_address(addr).await;
+            self.send_response(&[Command::NandAddr as u8, Status::Ok as u8]).await;
+        } else {
+            self.send_response(&[Command::NandAddr as u8, Status::Error as u8]).await;
+        }
+    }
+
+    async fn handle_read_page(&mut self, args: &[u8]) {
+        if args.len() >= 6 {
+            let page_addr = u32::from_le_bytes([args[0], args[1], args[2], args[3]]);
+            let page_size = u16::from_le_bytes([args[4], args[5]]) as usize;
+            let size = page_size.min(MAX_PAGE_SIZE);
+            
+            info!("READ_PAGE: addr={}, size={}", page_addr, size);
+            
+            // Read from NAND
+            self.nand.read_page(page_addr, &mut self.page_buffer[..size]).await;
+            
+            // Send data in chunks
+            self.send_data_chunked(size).await;
+        } else {
+            self.send_response(&[Command::NandReadPage as u8, Status::Error as u8]).await;
+        }
+    }
+
+    async fn handle_write_page(&mut self, args: &[u8]) {
+        if args.len() >= 6 {
+            let page_addr = u32::from_le_bytes([args[0], args[1], args[2], args[3]]);
+            let page_size = u16::from_le_bytes([args[4], args[5]]) as usize;
+            let size = page_size.min(MAX_PAGE_SIZE);
+            
+            info!("WRITE_PAGE: addr={}, size={}", page_addr, size);
+            
+            // Receive data from host
+            if self.receive_data_chunked(size).await {
+                // Program page
+                let success = self.nand.program_page(page_addr, &self.page_buffer[..size]).await;
+                
+                if success {
+                    self.send_response(&[Command::NandWritePage as u8, Status::Ok as u8]).await;
+                } else {
+                    warn!("Page program failed at {}", page_addr);
+                    self.send_response(&[Command::NandWritePage as u8, Status::Error as u8]).await;
+                }
+            } else {
+                self.send_response(&[Command::NandWritePage as u8, Status::Error as u8]).await;
+            }
+        } else {
+            self.send_response(&[Command::NandWritePage as u8, Status::Error as u8]).await;
+        }
+    }
+
+    async fn handle_read_id(&mut self) {
+        info!("READ_ID");
+        
+        // Read actual chip ID
+        let id = self.nand.read_id().await;
+        
+        let response = [
+            Command::ReadId as u8, 
+            Status::Ok as u8, 
+            id[0], id[1], id[2], id[3], id[4]
+        ];
+        self.send_response(&response).await;
+    }
+
+    async fn handle_reset(&mut self) {
+        info!("RESET");
+        self.nand.reset().await;
+        self.send_response(&[Command::Reset as u8, Status::Ok as u8]).await;
+    }
+
+    async fn send_response(&mut self, data: &[u8]) {
+        let _ = self.class.write_packet(data).await;
+    }
+
+    async fn send_data_chunked(&mut self, size: usize) {
+        let mut offset = 0;
+        while offset < size {
+            let chunk_size = (size - offset).min(PACKET_SIZE);
+            let _ = self.class.write_packet(&self.page_buffer[offset..offset + chunk_size]).await;
+            offset += chunk_size;
+            // Small delay to prevent USB buffer overflow
+            Timer::after_micros(50).await;
+        }
+    }
+
+    async fn receive_data_chunked(&mut self, size: usize) -> bool {
+        let mut offset = 0;
+        let mut chunk_buf = [0u8; PACKET_SIZE];
+        
+        while offset < size {
+            match self.class.read_packet(&mut chunk_buf).await {
+                Ok(n) => {
+                    let copy_size = n.min(size - offset);
+                    self.page_buffer[offset..offset + copy_size].copy_from_slice(&chunk_buf[..copy_size]);
+                    offset += copy_size;
+                }
+                Err(_) => return false,
+            }
+        }
+        true
     }
 }

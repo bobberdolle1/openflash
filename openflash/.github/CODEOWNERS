@@ -1,0 +1,18 @@
+# Default owners for everything
+* @openflash/maintainers
+
+# Core library
+/openflash/core/ @openflash/core-team
+
+# GUI application
+/openflash/gui/ @openflash/gui-team
+
+# Firmware
+/openflash/firmware/ @openflash/firmware-team
+
+# Documentation
+*.md @openflash/docs-team
+/docs/ @openflash/docs-team
+
+# CI/CD
+/.github/ @openflash/devops-team

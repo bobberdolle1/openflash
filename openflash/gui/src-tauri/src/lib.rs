@@ -1,27 +1,46 @@
-// OpenFlash Tauri Backend
-use tauri::Manager;
+//! OpenFlash Tauri Backend
+
+use std::sync::Mutex;
 
 mod command;
+mod config;
 mod device;
 mod flasher;
+mod mock;
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
+use config::AppConfig;
+use device::DeviceManager;
+
 pub fn run() {
     tauri::Builder::default()
-        .setup(|app| {
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .manage(Mutex::new(DeviceManager::new()))
+        .manage(Mutex::new(AppConfig::load()))
+        .setup(|_app| {
             #[cfg(debug_assertions)]
             {
-                app.get_webview_window("main").unwrap().open_devtools();
+                // DevTools disabled for now
             }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            command::ping,
+            command::enable_mock_mode,
+            command::scan_devices,
             command::list_devices,
+            command::connect_device,
+            command::disconnect_device,
+            command::ping,
             command::read_nand_id,
+            command::get_chip_info,
             command::dump_nand,
+            command::dump_nand_with_progress,
+            command::analyze_dump,
+            command::get_config,
+            command::set_config,
+            command::add_recent_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
-

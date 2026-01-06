@@ -1,212 +1,350 @@
-# OpenFlash 🔥
+<p align="center">
+  
+</p>
 
-> **The Ultimate NAND Flash Dumper & Analyzer**  
-> *Where premium software meets budget hardware*
+<h11>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Rust](https://img.shields.io/badge/Language-Rust-%23000000?logo=rust)](https://www.rust-lang.org/)
-[![Tauri](https://img.shields.io/badge/Framework-Tauri-%23FF0000)](https://tauri.app/)
+<p align="center">
+  <strong>The Ultimate Open-Source NAND Flash Toolkit</strong><br>
+  <e
+</p>
 
----
+<p align="center">
+  <a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge" alt="License"></a>
+  <a h
+  <a href="https://tauri.app/"><img src="https://img.shields.io/badge/Tauri-2.0-purple?style=for-the-badge&logo=tauri" alt="Tauri"></a>
 
-## 🚀 **What is OpenFlash?**
 
-**OpenFlash** is a cutting-edge, open-source hardware-software toolkit designed for **dumping, analyzing, and writing raw NAND flash memory**. Born from the philosophy of *"Cheap hardware, premium software"*, it pushes all complex logic into a powerful desktop application while keeping microcontroller firmware minimal and efficient.
+<">
+  <a href="#-quick-st</a> •
+  <a href=
+  <a href="#-supported-hardware">Ha</a> •
+  <a href="#-documentation">Docs</a> •
+  <a href="#-contributing">Contributing</a>
+</p>
 
-Perfect for **reverse engineers, hardware hackers, data recovery specialists, and embedded developers** who need to extract firmware from devices, analyze NAND flash dumps, or recover data from damaged storage.
-
----
-
-## ✨ **Key Features**
-
-### 🧠 **AI-Powered Analysis**
-- **Smart filesystem detection** using machine learning algorithms
-- **Automatic signature recognition** for common filesystems (SquashFS, UBIFS, YAFFS2, etc.)
-- **Intelligent data structure analysis** to identify code vs data regions
-
-### 🔍 **Advanced Auto-Detection**
-- **ONFI database** with 100+ known NAND flash chips
-- **Automatic chip parameter detection** (size, page size, block size, timing)
-- **Real-time timing optimization** for different chip generations
-
-### 🛡️ **ECC Handling**
-- **Hamming & BCH error correction** algorithms
-- **Automatic ECC detection and correction**
-- **Raw data preservation** with optional ECC processing
-
-### 🎨 **Visual Analysis Tools**
-- **Hex viewer** with virtual scrolling for large dumps
-- **Bitmap visualization** to identify data density patterns
-- **Timeline view** of flash operations
-
-### 🌐 **Cross-Platform Support**
-- **Windows, macOS, Linux** desktop application
-- **Hardware-agnostic firmware** (RP2040, STM32F1, more coming)
-- **USB 2.0 High-Speed** for maximum throughput
+<p align="center">
+  <img src="https://img.shields.io/badge/Windows-0078D6?dows">
+  <img src="https://img.shields.io/badge/macOS-000000?style=flat&logo=apple&log
+  <img src="https://img.shields.io/badge/Linux-FCC624?style=flat&l
+/p>
 
 ---
 
-## 🏗️ **Architecture**
+## What is OpenFlash?
+
+**OpenFlash** is a complete hardwaered.
+
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Desktop Application                  │
-├─────────────────────────────────────────────────────────┤
-│  GUI: Tauri + React/TypeScript + TailwindCSS            │
-│  Core: Rust with async Tokio runtime                    │
-│  USB: rusb/nusb for device communication                │
-│  AI: tract for on-device ML inference                   │
-└─────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────┐
-│                    Core Library                         │
-├─────────────────────────────────────────────────────────┤
-│  • ONFI: Chip database & auto-detection                 │
-│  • Protocol: USB communication protocol                 │
-│  • ECC: Error correction algorithms                     │
-│  • Analysis: AI-powered data analysis                   │
-└─────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────┐
-│                    Firmware (Microcontroller)           │
-├─────────────────────────────────────────────────────────┤
-│  • RP2040: Raspberry Pi Pico support                    │
-│  • STM32F1: Blue Pill development board                 │
-│  • Embassy: Async runtime for embedded Rust             │
-│  • PIO: Hardware-level timing precision (RP2040)        │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│  🖥️  Desktop App (Tauri + React)                                 │
+│  ├── Hex Viewer with virtual scrolling                          │
+│  ├── Bitmap visualization for data density analysis             │
+│  ├── AI-powered filesystem detection                            │
+│  └── ECC correction (Hamming + BCH)                             │
+├──────────────────────────────────────────────────────────────────┤
+│  📚  Core Library (Rust)                                         │
+│  ├── 30+ NAND chips in ONFI database                            │
+│  ├── Protocol definitions for USB communication                 │
+│  └── Signature detection (SquashFS, UBIFS, JFFS2, U-Boot...)    │
+├──────────────────────────────────────────────────────────────────┤
+│  🔌  Firmware (Embassy Rust)                                     │
+│  ├── Raspberry Pi Pico (RP2040) — Recommended                   │
+│  └── Blue Pill (STM32F103) — Budget option                      │
+└──────────────────────────────────────────────────────────────────┘
 ```
+
+### Why OpenFlash?
+
+| Feature | OpenFlash | Commercial Tools |
+|---------|-----------|------------------|
+| **Price** | ~$5 (Pico + wires) | $200-2000+ |
+| **Open Source** | ✅ MIT License | ❌ Proprietary |
+| **Cross-Platform** | ✅ Win/Mac/Linux | ⚠️ Often Windows-only |
+| **Extensible** | ✅ Add your own chips | ❌ Vendor lock-in |
+| **Modern Stack** | ✅ Rust + React | ❌ Legacy codebases |
 
 ---
 
-## 📋 **Supported Hardware**
+## 🚀 Quick Start
 
-### 🥁 **NAND Flash Types**
-- **SLC, MLC, TLC** NAND Flash memories
-- **ONFI 1.0, 2.0, 3.0, 4.0** compliant devices
-- **Toggle Mode** NAND support (planned)
-- **Parallel & Serial** interfaces
+### Option 1: Download Release (Recommended)
 
-### 🖥️ **Microcontroller Targets**
-- **Raspberry Pi Pico** (RP2040) - *Recommended*
-- **Blue Pill** (STM32F103C8T6) - *Budget option*
-- **ESP32-S3** - *Future support*
-- **Custom PCB** designs - *Coming soon*
+<table>
+<tr>
+<td align="center"><b>Windows</b></td>
+<td align="center"><b>macOS</b></td>
+<td align="center"><b>Linux</b></td>
+</tr>
+<tr>
+<td align="center">
+<a href="https://github.com/openflash/openflash/releases/latest/download/OpenFlash-1.0.0-x64-setup.exe">
+<img src="https://img.shields.io/badge/Download-.exe-0078D6?style=for-the-badge&logo=windows" alt="Windows Download">
+</a>
+</td>
+<td align="center">
+<a href="https://github.com/openflash/openflash/releases/latest/download/OpenFlash-1.0.0-universal.dmg">
+<img src="https://img.shields.io/badge/Download-.dmg-000000?style=for-the-badge&logo=apple" alt="macOS Download">
+</a>
+</td>
+<td align="center">
+<a href="https://github.com/openflash/openflash/releases/latest/download/OpenFlash-1.0.0-amd64.AppImage">
+<img src="https://img.shields.io/badge/Download-.AppImage-FCC624?style=for-the-badge&logo=linux" alt="Linux Download">
+</a>
+</td>
+</tr>
+</table>
 
-### 💻 **Host Systems**
-- **Windows 10/11** (x64, ARM64)
-- **macOS 10.15+** (Intel, Apple Silicon)
-- **Linux** (Ubuntu 20.04+, Debian 11+, Arch)
+### Option 2: Build from Source
 
----
-
-## 🛠️ **USB Protocol**
-
-OpenFlash uses a custom binary protocol over USB Bulk transfers:
-
-```
-┌─────────────┬─────────────────────────────────────────┐
-│  Command ID │  Arguments (63 bytes)                   │
-│  (1 byte)   │                                         │
-├─────────────┼─────────────────────────────────────────┤
-│    0x01     │  PING - Test connection                 │
-│    0x02     │  BUS_CONFIG - Set timing parameters     │
-│    0x03     │  NAND_CMD - Send NAND command (CLE)     │
-│    0x04     │  NAND_ADDR - Send address (ALE)         │
-│    0x05     │  NAND_READ_PAGE - Read page data        │
-│    0x06     │  NAND_WRITE_PAGE - Write page data      │
-│    0x07     │  READ_ID - Read chip ID                 │
-│    0x08     │  RESET - Reset NAND flash               │
-└─────────────┴─────────────────────────────────────────┘
-```
-
----
-
-## 🚀 **Quick Start**
-
-### Prerequisites
-- **Rust** (1.70+) - [Install Rust](https://rustup.rs/)
-- **Node.js** (18+) - [Install Node.js](https://nodejs.org/)
-- **Tauri prerequisites** - [Tauri Setup Guide](https://tauri.app/v1/guides/getting-started/prerequisites)
-
-### Installation
 ```bash
-# Clone the repository
-git clone https://github.com/your-username/openflash.git
-cd openflash
-
-# Install dependencies
-cd gui && npm install && cd ..
-
-# Build the application
+# Prerequisites: Rust 1.70+, Node.js 18+
+git clone https://github.com/openflash/openflash.git
+cd openflash/openflash/gui
+npm install
 cargo tauri build
 ```
 
-### Development
+### Try Without Hardware (Mock Mode)
+
+No hardware? No problem! OpenFlash includes a mock device for testing:
+
+1. Launch OpenFlash
+2. Click **🧪 Mock** → **🔄 Scan** → **Connect**
+3. Click **📥 Dump NAND** and explore the results
+
+---
+
+## ✨ Features
+
+### 🔍 Smart Chip Detection
+
+OpenFlash automatically identifies your NAND chip from its ID bytes and configures optimal timing parameters.
+
+**Supported Manufacturers:**
+Samsung • SK Hynix • Micron • Toshiba/Kioxia • Macronix • Winbond • GigaDevice
+
+**30+ chips in database** with automatic fallback to generic ONFI detection for unknown chips.
+
+### 🛡️ Error Correction
+
+Built-in ECC algorithms to recover data from degraded flash:
+
+| Algorithm | Capability | Use Case |
+|-----------|------------|----------|
+| **Hamming** | 1-bit correction | Legacy SLC NAND |
+| **BCH-4** | 4-bit correction | Modern SLC |
+| **BCH-8** | 8-bit correction | MLC NAND |
+| **BCH-16** | 16-bit correction | TLC NAND |
+
+### 🔬 Analysis Engine
+
+Automatic detection of:
+- **Filesystems:** SquashFS, UBIFS, JFFS2, CramFS
+- **Compression:** gzip, LZMA, XZ
+- **Bootloaders:** U-Boot signatures
+- **Bad blocks:** Factory and runtime markers
+- **Entropy analysis:** Identify encrypted/compressed regions
+
+### 🎨 Visual Tools
+
+- **Hex Viewer** — Virtual scrolling for multi-GB dumps, search, highlights
+- **Bitmap View** — See data density patterns at a glance, spot empty regions
+- **Signature Highlights** — Jump directly to detected filesystems
+
+---
+
+## 🔌 Supported Hardware
+
+### Microcontrollers
+
+| Board | Price | Speed | Recommendation |
+|-------|-------|-------|----------------|
+| **Raspberry Pi Pico** | ~$4 | ⚡ Fast | ✅ Best choice |
+| **Blue Pill (STM32F103)** | ~$2 | 🐢 Slower | 💰 Budget option |
+
+### NAND Flash Types
+
+- ✅ **SLC** — Single-Level Cell (most reliable)
+- ✅ **MLC** — Multi-Level Cell
+- ✅ **TLC** — Triple-Level Cell
+- ✅ **ONFI 1.0 - 4.0** compliant devices
+- ✅ **8-bit parallel** interface
+- 🔜 **16-bit** and **SPI NAND** coming soon
+
+### Wiring (Raspberry Pi Pico)
+
+```
+NAND Signal    Pico GPIO    Description
+───────────    ─────────    ───────────
+CLE            GP0          Command Latch Enable
+ALE            GP1          Address Latch Enable
+WE#            GP2          Write Enable (active low)
+RE#            GP3          Read Enable (active low)
+CE#            GP4          Chip Enable (active low)
+R/B#           GP5          Ready/Busy (needs 10kΩ pull-up)
+D0-D7          GP6-GP13     8-bit Data Bus
+VCC            3V3          ⚠️ 3.3V ONLY!
+GND            GND          Ground
+```
+
+> 📖 **Full wiring guide:** [docs/HARDWARE_GUIDE.md](openflash/docs/HARDWARE_GUIDE.md)
+
+---
+
+## 📊 Performance
+
+| Operation | RP2040 | STM32F1 |
+|-----------|--------|---------|
+| Chip ID Read | < 10ms | < 50ms |
+| Page Read (4KB) | ~100μs | ~500μs |
+| Full Dump (1GB) | ~45 min | ~3.5 hours |
+
+*Times include USB transfer and optional ECC processing.*
+
+---
+
+## 🏗️ Architecture
+
+OpenFlash follows the **"cheap hardware, premium software"** philosophy:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Desktop Application                     │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │   React     │  │   Tauri     │  │    Core Library     │  │
+│  │  Frontend   │◄─┤   Bridge    │◄─┤  (openflash-core)   │  │
+│  │  TypeScript │  │    Rust     │  │   ONFI • ECC • AI   │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
+└────────────────────────────┬────────────────────────────────┘
+                             │ USB Bulk Transfer
+                             ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Firmware (Embassy Rust)                  │
+│  ┌─────────────────────┐  ┌─────────────────────────────┐   │
+│  │   USB Handler       │  │      NAND Interface         │   │
+│  │   64-byte packets   │◄─┤  GPIO bit-bang / PIO        │   │
+│  └─────────────────────┘  └─────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Key Design Decisions:**
+- 🧠 **All intelligence in desktop app** — Firmware is minimal (~10KB)
+- 🔄 **Async everywhere** — Tokio on desktop, Embassy on MCU
+- 🦀 **100% Rust** — Memory safety from firmware to GUI backend
+- 📦 **Single binary** — No runtime dependencies
+
+---
+
+## 📚 Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Getting Started](openflash/docs/wiki/Getting-Started.md) | First-time setup guide |
+| [Hardware Guide](openflash/docs/HARDWARE_GUIDE.md) | Wiring diagrams and BOM |
+| [Supported Chips](openflash/docs/wiki/Supported-Chips.md) | Full chip compatibility list |
+| [Troubleshooting](openflash/docs/wiki/Troubleshooting.md) | Common issues and fixes |
+| [FAQ](openflash/docs/wiki/FAQ.md) | Frequently asked questions |
+
+---
+
+## 🛠️ Building Firmware
+
+### Raspberry Pi Pico (RP2040)
+
 ```bash
-# Run in development mode
-cargo tauri dev
+rustup target add thumbv6m-none-eabi
+cd openflash/firmware/rp2040
+cargo build --release --target thumbv6m-none-eabi
+
+# Flash: Hold BOOTSEL, connect USB, copy .uf2 to drive
+```
+
+### Blue Pill (STM32F103)
+
+```bash
+rustup target add thumbv7m-none-eabi
+cd openflash/firmware/stm32f1
+cargo build --release --target thumbv7m-none-eabi
+
+# Flash with ST-Link or USB-Serial bootloader
 ```
 
 ---
 
-## 📊 **Performance**
+## 🤝 Contributing
 
-| Operation | Speed (RP2040) | Speed (STM32F1) | Notes |
-|-----------|----------------|-----------------|-------|
-| Chip ID Read | < 10ms | < 50ms | Instant recognition |
-| Page Read (4KB) | ~100μs | ~500μs | Timing optimized |
-| Full Dump (1GB) | ~45 min | ~3.5 hours | ECC processing included |
+We welcome contributions! Whether it's:
 
----
+- 🐛 **Bug reports** — Found an issue? Let us know
+- 💡 **Feature requests** — Ideas for improvements
+- 🔧 **Pull requests** — Code contributions
+- 📝 **Documentation** — Help improve our docs
+- 🧪 **Testing** — Try with different NAND chips
 
-## 🧪 **AI Analysis Capabilities**
+See [CONTRIBUTING.md](openflash/CONTRIBUTING.md) for guidelines.
 
-OpenFlash uses machine learning to identify:
+### Development Setup
 
-- **Filesystem types**: SquashFS, UBIFS, YAFFS2, JFFS2, ext4
-- **Firmware signatures**: Router firmwares, bootloader patterns
-- **Data structures**: Compression formats, encryption headers
-- **Anomaly detection**: Corrupted sectors, bad blocks
+```bash
+# Run with hot-reload
+cd openflash/gui
+npm install
+cargo tauri dev
 
----
-
-## 🤝 **Contributing**
-
-We welcome contributions! Check out our [Contributing Guide](CONTRIBUTING.md) for details.
-
-### Development Roadmap
-- [ ] **SPI NAND** support
-- [ ] **eMMC** dumping capabilities  
-- [ ] **Advanced ECC** algorithms
-- [ ] **Hardware debugger** integration
-- [ ] **Multi-device** parallel dumping
-- [ ] **Web-based** analysis tools
+# Run tests
+cargo test -p openflash-core
+```
 
 ---
 
-## 📄 **License**
+## 🗺️ Roadmap
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+### v1.1 (Q2 2026)
+- [ ] SPI NAND support
+- [ ] Improved BCH performance
+- [ ] Batch operations
+
+### v1.2 (Q3 2026)
+- [ ] eMMC support
+- [ ] Multi-device parallel dumping
+- [ ] Plugin system
+
+### Future
+- [ ] Web-based analysis tools
+- [ ] Hardware debugger integration
+- [ ] Custom PCB designs
 
 ---
 
-## 🙏 **Acknowledgments**
+## 📄 License
 
-- **Rust Embedded Team** for embassy ecosystem
-- **Tauri Team** for the amazing framework
-- **Open Source Hardware** community
-- **NAND Flash** reverse engineering pioneers
+OpenFlash is released under the **MIT License**. See [LICENSE](openflash/LICENSE) for details.
+
+```
+MIT License — Do whatever you want, just don't blame us.
+```
+
+---
+
+## 🙏 Acknowledgments
+
+- **[Embassy](https://embassy.dev/)** — Async embedded Rust framework
+- **[Tauri](https://tauri.app/)** — Desktop app framework
+- **[nusb](https://github.com/kevinmehall/nusb)** — Pure Rust USB library
+- **Hardware hacking community** — For inspiration and testing
 
 ---
 
 <p align="center">
-  <em>Made with ❤️ for the hardware hacking community</em>
+  <strong>OpenFlash v1.0.0</strong><br>
+  <em>Your data deserves to be free.</em>
 </p>
 
 <p align="center">
-  <strong>OpenFlash - Because your data deserves to be free</strong>
+  <a href="https://github.com/openflash/openflash/stargazers">⭐ Star us on GitHub</a> •
+  <a href="https://github.com/openflash/openflash/issues">🐛 Report Bug</a> •
+  <a href="https://github.com/openflash/openflash/discussions">💬 Discussions</a>
 </p>
-

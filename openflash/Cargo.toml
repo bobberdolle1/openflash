@@ -2,8 +2,9 @@
 members = [
     "core",
     "gui/src-tauri",
-    "firmware/rp2040",
-    "firmware/stm32f1",
+    # Firmware requires specific embassy versions, build separately
+    # "firmware/rp2040",
+    # "firmware/stm32f1",
 ]
 resolver = "2"
 

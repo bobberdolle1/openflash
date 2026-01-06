@@ -15,8 +15,7 @@ defmt = "0.3"
 defmt-rtt = "0.4"
 pio = "0.2"
 pio-proc = "0.2"
-usb-device = "0.2"
-openflash-core = { path = "../core" }
+heapless = "0.8"
 
 [profile.dev]
 debug = 2

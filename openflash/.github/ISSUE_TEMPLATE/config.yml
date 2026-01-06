@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Discussions
+    url: https://github.com/openflash/openflash/discussions
+    about: Ask questions and discuss ideas
+  - name: 📖 Documentation
+    url: https://github.com/openflash/openflash/wiki
+    about: Check the wiki for guides and documentation
+  - name: 🔒 Security Issues
+    url: https://github.com/openflash/openflash/security/advisories/new
+    about: Report security vulnerabilities privately

@@ -1,0 +1,35 @@
+title: "[Idea] "
+labels:
+  - idea
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for sharing your idea! 💡
+        
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your Idea
+      description: Describe your idea in detail
+      placeholder: I think it would be great if...
+    validations:
+      required: true
+      
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case
+      description: How would this be used? Who would benefit?
+      placeholder: This would help users who...
+    validations:
+      required: true
+      
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Have you considered any alternatives?
+      placeholder: I also thought about...
+    validations:
+      required: false

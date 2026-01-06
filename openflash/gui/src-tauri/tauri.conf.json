@@ -1,5 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/schema.json",
+  "productName": "OpenFlash",
+  "version": "0.1.0",
+  "identifier": "com.openflash.dev",
   "build": {
     "beforeBuildCommand": "npm run build",
     "beforeDevCommand": "npm run dev",
@@ -8,37 +11,33 @@
   },
   "bundle": {
     "active": true,
-    "category": "DeveloperTool",
-    "copyright": "",
-    "deb": {
-      "depends": []
-    },
-    "externalBin": [],
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ],
-    "identifier": "com.openflash.dev",
-    "longDescription": "",
-    "macOS": {
-      "entitlements": null,
-      "exceptionDomain": "",
-      "frameworks": [],
-      "providerShortName": null,
-      "signingIdentity": null
-    },
-    "resources": [],
-    "shortDescription": "",
     "targets": "all",
+    "icon": ["icons/icon.png", "icons/128x128.png"],
+    "category": "DeveloperTool",
+    "shortDescription": "NAND Flash Dumper & Analyzer",
+    "longDescription": "OpenFlash is an open-source toolkit for dumping, analyzing, and writing raw NAND flash memory.",
+    "linux": {
+      "appimage": { "bundleMediaFramework": false }
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    },
     "windows": {
-      "certificateThumbprint": null,
-      "digestAlgorithm": "sha256",
-      "timestampUrl": ""
+      "digestAlgorithm": "sha256"
     }
   },
-  "productName": "OpenFlash",
-  "version": "0.1.0"
+  "app": {
+    "windows": [
+      {
+        "title": "OpenFlash",
+        "width": 1200,
+        "height": 800,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  }
 }

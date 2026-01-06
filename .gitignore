@@ -1,0 +1,37 @@
+# Rust
+target/
+**/target/
+
+# Node
+node_modules/
+dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Tauri
+WixTools/
+
+# Kiro
+.kiro/
+
+# Environment
+.env
+.env.local

@@ -8,6 +8,7 @@ pub mod emmc;
 pub mod ufs;
 pub mod ai;
 pub mod write_ops;
+pub mod scripting;
 
 pub use onfi::*;
 pub use protocol::*;
@@ -45,5 +46,18 @@ pub use write_ops::{
     ChipProgrammer, ProgramOptions, ProgramProgress, ProgramOperation,
     ChangeTracker, BackupMetadata,
     ChipCloner, CloneOptions, CloneMode, CloneProgress, ClonePhase,
+};
+pub use scripting::{
+    ScriptError, ScriptResult,
+    ConnectionConfig, DeviceInfo, DeviceHandle,
+    ReadOptions, WriteOptions, DumpResult, ReadStats,
+    ChipDetectionResult, AnalysisOptions, ScriptAnalysisResult,
+    PatternInfo, FilesystemInfo, AnomalyInfo, RecoverySuggestion, KeyCandidate,
+    ReportFormat, ReportOptions,
+    BatchJob, BatchJobType, BatchJobConfig, BatchJobStatus, BatchJobResult, BatchProcessor,
+    PluginMetadata, PluginHook, PluginContext, PluginResult, PluginManager,
+    CliCommand, CliOutputFormat, CliConfig,
+    CiJobConfig, CiOperation, CiArtifact, CiArtifactType, CiJobResult, CiOperationResult,
+    OpenFlash,
 };
 

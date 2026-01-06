@@ -1,0 +1,33 @@
+[package]
+name = "openflash-cli"
+version = "1.8.0"
+edition = "2021"
+description = "Command-line interface for OpenFlash NAND/eMMC programmer"
+license = "MIT"
+authors = ["OpenFlash Team"]
+repository = "https://github.com/openflash/openflash"
+keywords = ["nand", "flash", "programmer", "cli", "embedded"]
+categories = ["command-line-utilities", "embedded", "hardware-support"]
+
+[[bin]]
+name = "openflash"
+path = "src/main.rs"
+
+[dependencies]
+openflash-core = { path = "../core" }
+clap = { version = "4.4", features = ["derive", "env"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+indicatif = "0.17"
+console = "0.15"
+colored = "2.0"
+anyhow = "1.0"
+thiserror = "1.0"
+dirs = "5.0"
+toml = "0.8"
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.0"
+tempfile = "3.0"

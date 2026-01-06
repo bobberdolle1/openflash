@@ -2,7 +2,7 @@
 
 Детальный план развития проекта OpenFlash.
 
-## Текущий статус: v1.7.0
+## Текущий статус: v1.8.0
 
 ---
 
@@ -60,7 +60,7 @@
 - 10 property-based тестов
 - GUI: SPI NOR operations panel, UFS LUN selector
 
-### v1.7 — Advanced Write Operations ← ТЕКУЩАЯ
+### v1.7 — Advanced Write Operations
 - Full chip programming с верификацией
 - Bad block management (автоматическое управление)
 - Wear leveling write (отслеживание износа)
@@ -69,24 +69,17 @@
 - 12 новых протокольных команд (0xA0-0xAB)
 - 15 unit тестов для write_ops модуля
 
----
+### v1.8 — Scripting & Automation ← ТЕКУЩАЯ
+- **Python API (pyopenflash)** — полноценные Python bindings через PyO3
+- **CLI tool (openflash)** — командная строка с clap
+- **Batch processing** — очередь задач с зависимостями
+- **Custom analysis plugins** — система плагинов с хуками
+- **CI/CD integration** — типы для автоматизации
+- 12 новых протокольных команд (0xB0-0xBB)
+- 20+ unit тестов для scripting модуля
 
-## 🔜 Ближайшие планы
-
-### v1.8 — Scripting & Automation
-**Цель:** Автоматизация и интеграция
-
-| Фича | Приоритет | Сложность |
-|------|-----------|-----------|
-| Python API (pyopenflash) | 🔴 High | Medium |
-| CLI tool | 🔴 High | Low |
-| Batch processing | 🟡 Medium | Medium |
-| Custom analysis plugins | 🟡 Medium | High |
-| CI/CD integration | 🟢 Low | Low |
-
-**Детали:**
+**Python API пример:**
 ```python
-# Пример pyopenflash API
 import openflash
 
 device = openflash.connect()
@@ -95,7 +88,19 @@ analysis = openflash.ai.analyze(dump)
 analysis.export_report("report.md")
 ```
 
+**CLI примеры:**
+```bash
+openflash scan                    # Поиск устройств
+openflash detect                  # Определение чипа
+openflash read -o dump.bin        # Чтение дампа
+openflash write -i firmware.bin   # Запись прошивки
+openflash analyze dump.bin        # AI анализ
+openflash batch jobs.toml         # Пакетная обработка
+```
+
 ---
+
+## 🔜 Ближайшие планы
 
 ### v1.9 — Advanced AI Features
 **Цель:** ML и глубокий анализ
@@ -223,10 +228,10 @@ analysis.export_report("report.md")
 | v1.5 | Q1 2026 | ✅ Released |
 | v1.6 | Q1 2026 | ✅ Released |
 | v1.7 | Q2 2026 | ✅ Released |
-| v1.8 | Q3 2026 | 📋 Planned |
-| v1.9 | Q4 2026 | 📋 Planned |
-| v2.0 | Q1 2027 | 📋 Planned |
-| v2.1 | Q2 2027 | 📋 Planned |
+| v1.8 | Q2 2026 | ✅ Released |
+| v1.9 | Q3 2026 | 📋 Planned |
+| v2.0 | Q4 2026 | 📋 Planned |
+| v2.1 | Q1 2027 | 📋 Planned |
 | v3.0 | 2028 | 🔮 Future |
 
 ---

@@ -108,6 +108,20 @@ pub enum Command {
     CloneStart = 0xA9,            // Start chip-to-chip clone
     CloneStatus = 0xAA,           // Get clone operation status
     CloneAbort = 0xAB,            // Abort clone operation
+    
+    // Scripting & Automation Commands (0xB0-0xBF) - v1.8
+    BatchStart = 0xB0,            // Start batch operation
+    BatchStatus = 0xB1,           // Get batch operation status
+    BatchAbort = 0xB2,            // Abort batch operation
+    ScriptLoad = 0xB3,            // Load script to device
+    ScriptRun = 0xB4,             // Run loaded script
+    ScriptStatus = 0xB5,          // Get script execution status
+    PluginList = 0xB6,            // List loaded plugins
+    PluginLoad = 0xB7,            // Load plugin
+    PluginUnload = 0xB8,          // Unload plugin
+    RemoteConnect = 0xB9,         // Remote connection (server mode)
+    RemoteDisconnect = 0xBA,      // Disconnect remote
+    GetDeviceInfo = 0xBB,         // Get detailed device info
 }
 
 impl Command {
@@ -202,6 +216,20 @@ impl Command {
             0xA9 => Some(Command::CloneStart),
             0xAA => Some(Command::CloneStatus),
             0xAB => Some(Command::CloneAbort),
+            
+            // Scripting & Automation (v1.8)
+            0xB0 => Some(Command::BatchStart),
+            0xB1 => Some(Command::BatchStatus),
+            0xB2 => Some(Command::BatchAbort),
+            0xB3 => Some(Command::ScriptLoad),
+            0xB4 => Some(Command::ScriptRun),
+            0xB5 => Some(Command::ScriptStatus),
+            0xB6 => Some(Command::PluginList),
+            0xB7 => Some(Command::PluginLoad),
+            0xB8 => Some(Command::PluginUnload),
+            0xB9 => Some(Command::RemoteConnect),
+            0xBA => Some(Command::RemoteDisconnect),
+            0xBB => Some(Command::GetDeviceInfo),
             
             _ => None,
         }
@@ -299,6 +327,24 @@ impl Command {
             Command::CloneStart |
             Command::CloneStatus |
             Command::CloneAbort
+        )
+    }
+    
+    /// Check if command is for scripting & automation (v1.8)
+    pub fn is_scripting(&self) -> bool {
+        matches!(self,
+            Command::BatchStart |
+            Command::BatchStatus |
+            Command::BatchAbort |
+            Command::ScriptLoad |
+            Command::ScriptRun |
+            Command::ScriptStatus |
+            Command::PluginList |
+            Command::PluginLoad |
+            Command::PluginUnload |
+            Command::RemoteConnect |
+            Command::RemoteDisconnect |
+            Command::GetDeviceInfo
         )
     }
 }
@@ -530,5 +576,28 @@ mod tests {
         assert!(!Command::SpiNorRead.is_write_ops());
         assert!(!Command::EmmcInit.is_write_ops());
         assert!(!Command::Ping.is_write_ops());
+    }
+    
+    #[test]
+    fn test_scripting_command_from_u8() {
+        assert_eq!(Command::from_u8(0xB0), Some(Command::BatchStart));
+        assert_eq!(Command::from_u8(0xB1), Some(Command::BatchStatus));
+        assert_eq!(Command::from_u8(0xB3), Some(Command::ScriptLoad));
+        assert_eq!(Command::from_u8(0xB4), Some(Command::ScriptRun));
+        assert_eq!(Command::from_u8(0xB6), Some(Command::PluginList));
+        assert_eq!(Command::from_u8(0xB9), Some(Command::RemoteConnect));
+        assert_eq!(Command::from_u8(0xBB), Some(Command::GetDeviceInfo));
+    }
+    
+    #[test]
+    fn test_scripting_command_detection() {
+        assert!(Command::BatchStart.is_scripting());
+        assert!(Command::ScriptRun.is_scripting());
+        assert!(Command::PluginList.is_scripting());
+        assert!(Command::RemoteConnect.is_scripting());
+        assert!(Command::GetDeviceInfo.is_scripting());
+        assert!(!Command::FullChipProgram.is_scripting());
+        assert!(!Command::SpiNorRead.is_scripting());
+        assert!(!Command::Ping.is_scripting());
     }
 }

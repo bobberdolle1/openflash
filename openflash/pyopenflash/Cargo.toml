@@ -1,0 +1,19 @@
+[package]
+name = "pyopenflash"
+version = "1.8.0"
+edition = "2021"
+description = "Python bindings for OpenFlash NAND/eMMC programmer"
+license = "MIT"
+
+[lib]
+name = "openflash"
+crate-type = ["cdylib"]
+
+[dependencies]
+openflash-core = { path = "../core" }
+pyo3 = { version = "0.20", features = ["extension-module"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[features]
+default = []

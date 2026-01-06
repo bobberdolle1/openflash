@@ -7,6 +7,98 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-Q2
+
+### Added
+- **Scripting & Automation**
+  - New `scripting` module in core library for automation support
+  - **Python API (pyopenflash)**: Full Python bindings via PyO3
+    - `openflash.connect()` - Connect to device
+    - `device.detect()` - Detect chip
+    - `device.read_full()` / `device.read()` - Read operations
+    - `device.write()` - Write operations
+    - `openflash.ai.analyze()` - AI analysis
+    - `analysis.export_report()` - Export reports
+    - `openflash.Batch` - Batch processing
+    - `openflash.load_dump()` / `openflash.compare_dumps()` - Utilities
+  
+  - **CLI Tool (openflash)**: Full-featured command-line interface
+    - `openflash scan` - Scan for devices
+    - `openflash detect` - Detect chip
+    - `openflash read -o dump.bin` - Read chip
+    - `openflash write -i firmware.bin` - Write chip
+    - `openflash erase` - Erase chip
+    - `openflash verify -f file.bin` - Verify contents
+    - `openflash analyze dump.bin` - AI analysis
+    - `openflash compare file1.bin file2.bin` - Compare dumps
+    - `openflash clone` - Chip-to-chip clone
+    - `openflash batch jobs.toml` - Batch processing
+    - `openflash script script.py` - Run scripts
+    - `openflash chips` - List supported chips
+    - JSON/CSV/Table output formats
+    - Progress bars and colored output
+  
+  - **Batch Processing**: Job queue with dependencies
+    - `BatchProcessor` - Job queue manager
+    - `BatchJob` - Job definition with dependencies
+    - Read, Write, Erase, Verify, Analyze, Clone, Report job types
+    - Stop-on-error and parallel execution modes
+  
+  - **Plugin System**: Extensible analysis plugins
+    - `PluginManager` - Plugin lifecycle management
+    - `PluginMetadata` - Plugin information
+    - `PluginHook` - Pre/Post read/write, Analysis, Pattern/FS detection
+    - `PluginContext` / `PluginResult` - Plugin I/O
+  
+  - **CI/CD Integration**: Types for automation pipelines
+    - `CiJobConfig` - CI job configuration
+    - `CiOperation` - Verify, Read, Write, Analyze, Compare operations
+    - `CiArtifact` - Output artifacts (dumps, reports, logs)
+    - `CiJobResult` / `CiOperationResult` - Execution results
+
+- **New Protocol Commands (0xB0-0xBB)**
+  - `BatchStart` (0xB0) - Start batch operation
+  - `BatchStatus` (0xB1) - Get batch status
+  - `BatchAbort` (0xB2) - Abort batch
+  - `ScriptLoad` (0xB3) - Load script to device
+  - `ScriptRun` (0xB4) - Run loaded script
+  - `ScriptStatus` (0xB5) - Get script status
+  - `PluginList` (0xB6) - List plugins
+  - `PluginLoad` (0xB7) - Load plugin
+  - `PluginUnload` (0xB8) - Unload plugin
+  - `RemoteConnect` (0xB9) - Remote connection
+  - `RemoteDisconnect` (0xBA) - Disconnect remote
+  - `GetDeviceInfo` (0xBB) - Get device info
+
+- **New Types and Structures**
+  - `ScriptError`, `ScriptResult` - Error handling
+  - `ConnectionConfig`, `DeviceInfo`, `DeviceHandle` - Device connection
+  - `ReadOptions`, `WriteOptions`, `DumpResult`, `ReadStats` - I/O options
+  - `ChipDetectionResult` - Chip detection
+  - `AnalysisOptions`, `ScriptAnalysisResult` - Analysis configuration
+  - `PatternInfo`, `FilesystemInfo`, `AnomalyInfo`, `KeyCandidate` - Analysis results
+  - `ReportFormat`, `ReportOptions` - Report export
+  - `CliCommand`, `CliConfig`, `CliOutputFormat` - CLI types
+  - `OpenFlash` - High-level API class
+
+### Changed
+- Protocol version updated to 0x18
+- Core library version updated to 1.8.0
+- CLI version: 1.8.0
+- pyopenflash version: 1.8.0
+- Added `is_scripting()` method to Command enum
+- Extended lib.rs exports with scripting types
+- Added serde_json dependency to core
+
+### Tests
+- 20+ new unit tests for scripting module
+- Connection and device handle tests
+- Batch processor tests
+- Plugin manager tests
+- Read/Write/Analysis options tests
+- CLI config tests
+- CI job config tests
+
 ## [1.7.0] - 2026-Q2
 
 ### Added
@@ -350,6 +442,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
+- **1.8.0** - Scripting & Automation: Python API, CLI tool, batch processing, plugins, CI/CD
 - **1.7.0** - Advanced write operations, bad block management, wear leveling, incremental backup, cloning
 - **1.6.0** - SPI NOR flash, UFS, ONFI 5.0, 16-bit NAND support
 - **1.5.0** - ESP32 support, STM32F4 support, WiFi connectivity
@@ -361,7 +454,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **1.0.0** - Initial public release
 - **0.x.x** - Development versions (not released)
 
-[Unreleased]: https://github.com/openflash/openflash/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/openflash/openflash/compare/v1.8.0...HEAD
+[1.8.0]: https://github.com/openflash/openflash/compare/v1.7.0...v1.8.0
+[1.7.0]: https://github.com/openflash/openflash/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/openflash/openflash/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/openflash/openflash/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/openflash/openflash/compare/v1.3.0...v1.4.0

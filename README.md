@@ -37,12 +37,12 @@ Commercial NAND programmers cost **$200-2000**. They run on Windows XP. They loo
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                                                                         │
-│   Your $4 Raspberry Pi Pico    ──────►    Any NAND Flash Chip          │
+│   Your $4 Raspberry Pi Pico    ──────►    Any NAND Flash Chip           │
 │                                                                         │
-│   + 20 jumper wires ($1)                  Samsung, Hynix, Micron,      │
-│   + This software (free)                  Toshiba, Macronix...         │
+│   + 20 jumper wires ($1)                  Samsung, Hynix, Micron,       │
+│   + This software (free)                  Toshiba, Macronix...          │
 │   ─────────────────────────               ────────────────────          │
-│   = Full NAND programmer                  128MB to 8GB+                │
+│   = Full NAND programmer                  128MB to 8GB+                 │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```

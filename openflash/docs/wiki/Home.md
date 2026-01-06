@@ -39,9 +39,9 @@ All complex logic runs on your computer, not the microcontroller. This means:
 ## Getting Help
 
 - 📖 Check this wiki
-- 💬 [GitHub Discussions](https://github.com/openflash/openflash/discussions)
-- 🐛 [Report bugs](https://github.com/openflash/openflash/issues)
+- 💬 [GitHub Discussions](https://github.com/bobberdolle1/openflash/discussions)
+- 🐛 [Report bugs](https://github.com/bobberdolle1/openflash/issues)
 
 ## Contributing
 
-We welcome contributions! See [CONTRIBUTING.md](https://github.com/openflash/openflash/blob/main/CONTRIBUTING.md)
+We welcome contributions! See [CONTRIBUTING.md](https://github.com/bobberdolle1/openflash/blob/main/CONTRIBUTING.md)

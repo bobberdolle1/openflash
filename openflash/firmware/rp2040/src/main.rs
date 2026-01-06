@@ -1,5 +1,6 @@
 //! OpenFlash RP2040 Firmware
 //! Minimal firmware for NAND flash operations via USB
+//! Supports both parallel NAND and SPI NAND interfaces
 
 #![no_std]
 #![no_main]
@@ -10,14 +11,17 @@ use embassy_rp::bind_interrupts;
 use embassy_rp::gpio::{Input, Output, Level, Pull, Flex};
 use embassy_rp::peripherals::USB;
 use embassy_rp::usb::{Driver, InterruptHandler};
+use embassy_rp::spi::{Spi, Config as SpiConfig};
 use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
 use embassy_usb::{Builder, Config};
 use {defmt_rtt as _, panic_probe as _};
 
 mod pio_nand;
+mod spi_nand;
 mod usb_handler;
 
 use pio_nand::{NandController, NandPins};
+use spi_nand::SpiNandController;
 use usb_handler::UsbHandler;
 
 bind_interrupts!(struct Irqs {
@@ -33,6 +37,7 @@ static mut STATE: Option<State> = None;
 
 /// Pin assignments for NAND interface on Raspberry Pi Pico
 /// 
+/// === Parallel NAND Mode ===
 /// Control signals:
 ///   GP0  - CLE (Command Latch Enable)
 ///   GP1  - ALE (Address Latch Enable)
@@ -51,7 +56,14 @@ static mut STATE: Option<State> = None;
 ///   GP12 - D6
 ///   GP13 - D7
 ///
-/// Optional:
+/// === SPI NAND Mode ===
+/// SPI signals (directly on SPI0):
+///   GP16 - SPI0 RX (MISO)
+///   GP17 - SPI0 CS# (directly controlled)
+///   GP18 - SPI0 SCK
+///   GP19 - SPI0 TX (MOSI)
+///
+/// Optional (shared):
 ///   GP14 - WP# (Write Protect, active low)
 ///   GP25 - LED (onboard)
 
@@ -86,7 +98,23 @@ async fn main(spawner: Spawner) {
 
     // Create NAND controller
     let nand = NandController::new(nand_pins);
-    info!("NAND controller initialized");
+    info!("Parallel NAND controller initialized");
+
+    // Initialize SPI NAND controller
+    // SPI0 pins: GP16=RX, GP17=CS, GP18=SCK, GP19=TX
+    let mut spi_config = SpiConfig::default();
+    spi_config.frequency = 40_000_000; // 40 MHz initial speed
+    
+    let spi = Spi::new_blocking(
+        p.SPI0,
+        p.PIN_18, // SCK
+        p.PIN_19, // MOSI
+        p.PIN_16, // MISO
+        spi_config,
+    );
+    let spi_cs = Output::new(p.PIN_17, Level::High); // CS# idle high
+    let spi_nand = SpiNandController::new(spi, spi_cs);
+    info!("SPI NAND controller initialized");
 
     // Create USB driver
     let driver = Driver::new(p.USB, Irqs);

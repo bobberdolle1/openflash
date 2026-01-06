@@ -5,7 +5,7 @@
     ██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║██╔══╝  ██║     ██╔══██║╚════██║██╔══██║
     ╚██████╔╝██║     ███████╗██║ ╚████║██║     ███████╗██║  ██║███████║██║  ██║
      ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝╚═╝     ╚══════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
-                                                                        v1.0.0
+                                                                        v1.1.0
 ```
 
 <div align="center">
@@ -39,10 +39,13 @@ Commercial NAND programmers cost **$200-2000**. They run on Windows XP. They loo
 │                                                                         │
 │   Your $4 Raspberry Pi Pico    ──────►    Any NAND Flash Chip           │
 │                                                                         │
-│   + 20 jumper wires ($1)                  Samsung, Hynix, Micron,       │
-│   + This software (free)                  Toshiba, Macronix...          │
-│   ─────────────────────────               ────────────────────          │
-│   = Full NAND programmer                  128MB to 8GB+                 │
+│   + 20 jumper wires ($1)                  Parallel NAND:                │
+│   + This software (free)                  Samsung, Hynix, Micron...     │
+│   ─────────────────────────                                             │
+│   = Full NAND programmer                  SPI NAND (v1.1+):             │
+│                                           GigaDevice, Winbond...        │
+│                                                                         │
+│                                           128MB to 8GB+                 │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -83,7 +86,10 @@ Requires: Rust 1.70+, Node 18+, [Tauri prerequisites](https://tauri.app/v1/guide
 
 ### Got a Raspberry Pi Pico?
 
-**Wire it up** (10 minutes with jumper wires):
+**Wire it up** — choose your interface:
+
+<details>
+<summary><b>Parallel NAND (10 minutes with jumper wires)</b></summary>
 
 ```
 PICO          NAND
@@ -106,6 +112,24 @@ GP13  ───►    D7
 GND   ───►    GND
 ```
 
+</details>
+
+<details>
+<summary><b>SPI NAND (v1.1+ — only 4 wires!)</b></summary>
+
+```
+PICO          SPI NAND
+────          ────────
+GP16  ───►    DO (MISO)
+GP17  ───►    CS#
+GP18  ───►    CLK
+GP19  ───►    DI (MOSI)
+3V3   ───►    VCC   ⚠️  3.3V ONLY
+GND   ───►    GND
+```
+
+</details>
+
 **Flash firmware:**
 1. Hold BOOTSEL on Pico
 2. Plug USB
@@ -121,18 +145,20 @@ GND   ───►    GND
 
 ## 🔥 What It Does
 
-### Reads any parallel NAND
+### Reads any NAND flash
 
 ```
-Supported:  SLC, MLC, TLC
-            ONFI 1.0 → 4.0
-            8-bit bus (16-bit coming)
-            
-Tested:     Samsung K9F series
-            Hynix HY27UF series
-            Micron MT29F series
-            Toshiba TC58NVG series
-            + generic ONFI detection for unknown chips
+Parallel NAND:
+├── SLC, MLC, TLC
+├── ONFI 1.0 → 4.0
+├── 8-bit bus (16-bit coming)
+└── 30+ chips: Samsung, Hynix, Micron, Toshiba, Macronix
+
+SPI NAND (v1.1+):
+├── Standard SPI + Quad SPI (QSPI)
+├── Internal ECC support
+├── 20+ chips: GigaDevice, Winbond, Macronix, Micron, Toshiba, XTX
+└── Only 4 wires needed!
 ```
 
 ### Fixes bit errors
@@ -273,13 +299,18 @@ cargo build --release --target thumbv7m-none-eabi
 ## 🗺️ Roadmap
 
 ```
-v1.0  ✅  You are here
+v1.0  ✅  Initial release
           ├── Parallel NAND read/write
           ├── 30+ chips in database
           ├── Hamming + BCH ECC
           └── SquashFS/UBIFS/JFFS2 detection
 
-v1.1  🔜  SPI NAND support
+v1.1  ✅  SPI NAND support ← YOU ARE HERE
+          ├── 20+ SPI NAND chips
+          ├── Quad SPI (QSPI) support
+          ├── Internal ECC status
+          └── Only 4 wires needed!
+
 v1.2  📋  eMMC support
 v2.0  🚀  Multi-device parallel dumping
 ```
@@ -310,7 +341,7 @@ MIT. Do whatever. Don't sue us.
 
 <div align="center">
 
-**OpenFlash v1.0.0**
+**OpenFlash v1.1.0**
 
 *Your data wants to be free.*
 

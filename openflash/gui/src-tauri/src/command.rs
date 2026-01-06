@@ -5,7 +5,7 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::config::AppConfig;
-use crate::device::{ChipInfo, DeviceInfo, DeviceManager};
+use crate::device::{ChipInfo, DeviceInfo, DeviceManager, FlashInterface};
 use crate::mock;
 
 #[tauri::command]
@@ -94,7 +94,7 @@ pub async fn read_nand_id(
     device_manager: State<'_, Mutex<DeviceManager>>,
 ) -> Result<Vec<u8>, String> {
     if mock::is_mock_connected() {
-        let response = mock::process_mock_command(openflash_core::protocol::Command::ReadId, &[]);
+        let response = mock::process_mock_command(openflash_core::protocol::Command::NandReadId, &[]);
         if response.len() >= 7 && response[1] == 0x00 {
             return Ok(response[2..7].to_vec());
         }
@@ -107,7 +107,7 @@ pub async fn read_nand_id(
     };
 
     let dev = device.lock().await;
-    let response = dev.send_command(openflash_core::protocol::Command::ReadId, &[]).await?;
+    let response = dev.send_command(openflash_core::protocol::Command::NandReadId, &[]).await?;
 
     if response.len() >= 7 && response[1] == 0x00 {
         Ok(response[2..7].to_vec())
@@ -124,26 +124,106 @@ pub async fn get_chip_info(
         return Ok(mock::get_mock_chip_info());
     }
     
-    let chip_id = read_nand_id(device_manager).await?;
+    let chip_id = read_nand_id(device_manager.clone()).await?;
     
-    if let Some(info) = openflash_core::onfi::get_chip_info(&chip_id) {
-        Ok(ChipInfo {
-            manufacturer: info.manufacturer,
-            model: info.model,
-            chip_id,
-            size_mb: info.size_mb,
-            page_size: info.page_size,
-            block_size: info.block_size,
-        })
+    // Check current interface mode
+    let interface = {
+        let manager = device_manager.lock().map_err(|e| e.to_string())?;
+        manager.get_interface()
+    };
+    
+    match interface {
+        FlashInterface::ParallelNand => {
+            if let Some(info) = openflash_core::onfi::get_chip_info(&chip_id) {
+                Ok(ChipInfo {
+                    manufacturer: info.manufacturer,
+                    model: info.model,
+                    chip_id,
+                    size_mb: info.size_mb,
+                    page_size: info.page_size,
+                    block_size: info.block_size,
+                    interface: FlashInterface::ParallelNand,
+                })
+            } else {
+                Ok(ChipInfo {
+                    manufacturer: format!("Unknown (0x{:02X})", chip_id.first().unwrap_or(&0)),
+                    model: "Unknown".to_string(),
+                    chip_id,
+                    size_mb: 0,
+                    page_size: 2048,
+                    block_size: 64,
+                    interface: FlashInterface::ParallelNand,
+                })
+            }
+        }
+        FlashInterface::SpiNand => {
+            if let Some(info) = openflash_core::spi_nand::get_spi_nand_chip_info(&chip_id) {
+                Ok(ChipInfo {
+                    manufacturer: info.manufacturer,
+                    model: info.model,
+                    chip_id,
+                    size_mb: info.size_mb,
+                    page_size: info.page_size,
+                    block_size: info.block_size,
+                    interface: FlashInterface::SpiNand,
+                })
+            } else {
+                Ok(ChipInfo {
+                    manufacturer: format!("Unknown (0x{:02X})", chip_id.first().unwrap_or(&0)),
+                    model: "Unknown SPI NAND".to_string(),
+                    chip_id,
+                    size_mb: 0,
+                    page_size: 2048,
+                    block_size: 64,
+                    interface: FlashInterface::SpiNand,
+                })
+            }
+        }
+    }
+}
+
+/// Set the flash interface mode (Parallel NAND or SPI NAND)
+#[tauri::command]
+pub fn set_interface(
+    interface: FlashInterface,
+    device_manager: State<'_, Mutex<DeviceManager>>,
+) -> Result<(), String> {
+    let mut manager = device_manager.lock().map_err(|e| e.to_string())?;
+    manager.set_interface(interface);
+    Ok(())
+}
+
+/// Get the current flash interface mode
+#[tauri::command]
+pub fn get_interface(
+    device_manager: State<'_, Mutex<DeviceManager>>,
+) -> Result<FlashInterface, String> {
+    let manager = device_manager.lock().map_err(|e| e.to_string())?;
+    Ok(manager.get_interface())
+}
+
+/// Read SPI NAND chip ID
+#[tauri::command]
+pub async fn read_spi_nand_id(
+    device_manager: State<'_, Mutex<DeviceManager>>,
+) -> Result<Vec<u8>, String> {
+    if mock::is_mock_connected() {
+        // Return mock SPI NAND ID (GigaDevice GD5F1GQ4)
+        return Ok(vec![0xC8, 0xD1, 0x00]);
+    }
+    
+    let device = {
+        let manager = device_manager.lock().map_err(|e| e.to_string())?;
+        manager.get_active_device().ok_or("No device connected")?
+    };
+
+    let dev = device.lock().await;
+    let response = dev.send_command(openflash_core::protocol::Command::SpiNandReadId, &[]).await?;
+
+    if response.len() >= 5 && response[1] == 0x00 {
+        Ok(response[2..5].to_vec())
     } else {
-        Ok(ChipInfo {
-            manufacturer: format!("Unknown (0x{:02X})", chip_id.first().unwrap_or(&0)),
-            model: "Unknown".to_string(),
-            chip_id,
-            size_mb: 0,
-            page_size: 2048,
-            block_size: 64,
-        })
+        Err("Failed to read SPI NAND chip ID".to_string())
     }
 }
 

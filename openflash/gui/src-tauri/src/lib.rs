@@ -40,6 +40,10 @@ pub fn run() {
             command::get_config,
             command::set_config,
             command::add_recent_file,
+            // SPI NAND commands
+            command::set_interface,
+            command::get_interface,
+            command::read_spi_nand_id,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

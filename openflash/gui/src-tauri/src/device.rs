@@ -12,6 +12,14 @@ const PRODUCT_ID: u16 = 0xCAFE;
 const EP_OUT: u8 = 0x01;
 const EP_IN: u8 = 0x81;
 
+/// Flash interface type
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum FlashInterface {
+    #[default]
+    ParallelNand,
+    SpiNand,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceInfo {
     pub id: String,
@@ -28,6 +36,7 @@ pub struct ChipInfo {
     pub size_mb: u32,
     pub page_size: u32,
     pub block_size: u32,
+    pub interface: FlashInterface,
 }
 
 pub struct UsbDevice {
@@ -79,6 +88,7 @@ impl UsbDevice {
 pub struct DeviceManager {
     devices: Vec<DeviceInfo>,
     active_device: Option<Arc<TokioMutex<UsbDevice>>>,
+    interface: FlashInterface,
 }
 
 impl DeviceManager {
@@ -86,7 +96,16 @@ impl DeviceManager {
         Self {
             devices: Vec::new(),
             active_device: None,
+            interface: FlashInterface::ParallelNand,
         }
+    }
+    
+    pub fn set_interface(&mut self, interface: FlashInterface) {
+        self.interface = interface;
+    }
+    
+    pub fn get_interface(&self) -> FlashInterface {
+        self.interface
     }
 
     pub fn scan_devices(&mut self) -> Vec<DeviceInfo> {

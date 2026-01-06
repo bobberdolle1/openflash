@@ -1,6 +1,6 @@
 //! Mock device for testing without real hardware
 
-use crate::device::{ChipInfo, DeviceInfo};
+use crate::device::{ChipInfo, DeviceInfo, FlashInterface};
 use openflash_core::protocol::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -60,6 +60,7 @@ pub fn get_mock_chip_info() -> ChipInfo {
         size_mb: 512,
         page_size: 2048,
         block_size: 64,
+        interface: FlashInterface::ParallelNand,
     }
 }
 
@@ -68,31 +69,47 @@ pub fn process_mock_command(cmd: Command, args: &[u8]) -> Vec<u8> {
     match cmd {
         Command::Ping => vec![0x01, 0x00], // OK
         
-        Command::ReadId => {
+        Command::NandReadId => {
             // Return Samsung K9F4G08U0D ID
-            vec![0x07, 0x00, 0xEC, 0xDC, 0x10, 0x95, 0x54]
+            vec![0x14, 0x00, 0xEC, 0xDC, 0x10, 0x95, 0x54]
+        }
+        
+        Command::SpiNandReadId => {
+            // Return GigaDevice GD5F1GQ4 ID
+            vec![0x20, 0x00, 0xC8, 0xD1, 0x00]
         }
         
         Command::Reset => vec![0x08, 0x00],
         
         Command::BusConfig => vec![0x02, 0x00],
         
-        Command::NandCmd => vec![0x03, 0x00],
+        Command::NandCmd => vec![0x10, 0x00],
         
-        Command::NandAddr => vec![0x04, 0x00],
+        Command::NandAddr => vec![0x11, 0x00],
         
-        Command::NandReadPage => {
+        Command::NandReadPage | Command::SpiNandReadCache => {
             // Generate mock page data
             if args.len() >= 6 {
                 let page_addr = u32::from_le_bytes([args[0], args[1], args[2], args[3]]);
                 let page_size = u16::from_le_bytes([args[4], args[5]]) as usize;
                 generate_mock_page(page_addr, page_size)
             } else {
-                vec![0x05, 0x01] // Error
+                vec![0x12, 0x01] // Error
             }
         }
         
-        Command::NandWritePage => vec![0x06, 0x00],
+        Command::NandWritePage | Command::SpiNandProgramExec => vec![0x13, 0x00],
+        
+        Command::SpiNandReset => vec![0x21, 0x00],
+        Command::SpiNandGetFeature => vec![0x22, 0x00, 0x00], // Feature value = 0
+        Command::SpiNandSetFeature => vec![0x23, 0x00],
+        Command::SpiNandPageRead => vec![0x24, 0x00],
+        Command::SpiNandProgramLoad | Command::SpiNandProgramLoadX4 => vec![0x27, 0x00],
+        Command::SpiNandBlockErase => vec![0x2A, 0x00],
+        Command::SpiNandWriteEnable => vec![0x2B, 0x00],
+        Command::SpiNandWriteDisable => vec![0x2C, 0x00],
+        
+        _ => vec![0x00, 0x01], // Unknown command error
     }
 }
 

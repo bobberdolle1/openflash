@@ -15,6 +15,8 @@ interface DeviceInfo {
   connected: boolean;
 }
 
+type FlashInterface = "ParallelNand" | "SpiNand";
+
 interface ChipInfo {
   manufacturer: string;
   model: string;
@@ -22,6 +24,7 @@ interface ChipInfo {
   size_mb: number;
   page_size: number;
   block_size: number;
+  interface: FlashInterface;
 }
 
 interface AnalysisResult {
@@ -46,6 +49,7 @@ function App() {
   const [isWorking, setIsWorking] = useState(false);
   const [mockEnabled, setMockEnabled] = useState(false);
   const [hexHighlights, setHexHighlights] = useState<{ start: number; end: number; color: string; label?: string }[]>([]);
+  const [flashInterface, setFlashInterface] = useState<FlashInterface>("ParallelNand");
 
   useEffect(() => {
     scanDevices();
@@ -74,6 +78,22 @@ function App() {
       setStatus(`Error: ${e}`);
     }
   }, []);
+
+  async function switchInterface(newInterface: FlashInterface) {
+    try {
+      await invoke("set_interface", { interface: newInterface });
+      setFlashInterface(newInterface);
+      setChipInfo(null);
+      setStatus(`Switched to ${newInterface === "SpiNand" ? "SPI NAND" : "Parallel NAND"} mode`);
+      
+      // Re-read chip info if connected
+      if (selectedDevice) {
+        await readChipInfo();
+      }
+    } catch (e) {
+      setStatus(`Error: ${e}`);
+    }
+  }
 
   async function scanDevices() {
     try {
@@ -307,6 +327,28 @@ function App() {
 
           <section className="panel chip-info">
             <h2>Chip Info</h2>
+            
+            {/* Interface selector */}
+            <div className="interface-selector">
+              <label>Interface:</label>
+              <div className="toggle-buttons">
+                <button 
+                  className={flashInterface === "ParallelNand" ? "active" : ""}
+                  onClick={() => switchInterface("ParallelNand")}
+                  disabled={isWorking}
+                >
+                  Parallel
+                </button>
+                <button 
+                  className={flashInterface === "SpiNand" ? "active" : ""}
+                  onClick={() => switchInterface("SpiNand")}
+                  disabled={isWorking}
+                >
+                  SPI
+                </button>
+              </div>
+            </div>
+            
             {chipInfo ? (
               <div className="info-grid compact">
                 <div>
@@ -328,6 +370,12 @@ function App() {
                 <div>
                   <label>Block</label>
                   <span>{chipInfo.block_size} pages</span>
+                </div>
+                <div>
+                  <label>Interface</label>
+                  <span className="interface-badge">
+                    {chipInfo.interface === "SpiNand" ? "🔌 SPI" : "📊 Parallel"}
+                  </span>
                 </div>
                 <div>
                   <label>Chip ID</label>

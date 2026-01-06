@@ -8,7 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Initial release preparation
+- **SPI NAND Support** (v1.1 feature)
+  - New `spi_nand` module in core library with chip database
+  - Support for 20+ SPI NAND chips (GigaDevice, Winbond, Macronix, Micron, Toshiba, XTX)
+  - SPI NAND protocol commands (READ_ID, PAGE_READ, PROGRAM, ERASE)
+  - Internal ECC status reporting
+  - Quad SPI (QSPI) support for faster transfers
+  - SPI NAND driver for RP2040 firmware
+  - Interface selector in GUI (Parallel/SPI toggle)
+  - Updated documentation with SPI NAND wiring diagrams
+
+### Changed
+- Protocol commands reorganized with dedicated ranges for Parallel NAND (0x10-0x1F) and SPI NAND (0x20-0x3F)
+- ChipInfo now includes interface type field
+- DeviceManager tracks current interface mode
 
 ## [1.0.0] - 2026-01-XX
 

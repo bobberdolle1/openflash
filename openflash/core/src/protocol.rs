@@ -152,6 +152,24 @@ pub enum Command {
     ProductionStatus = 0xDD,      // Get production status
     ProductionStats = 0xDE,       // Get production statistics
     ApiKeyValidate = 0xDF,        // Validate API key
+    
+    // Hardware Expansion Commands (0xE0-0xEF) - v2.1
+    PcbDetect = 0xE0,             // Detect PCB and get info
+    PcbCapabilities = 0xE1,       // Get PCB capabilities
+    SetSocket = 0xE2,             // Set socket type
+    AdapterInfo = 0xE3,           // Get adapter info
+    SetPinout = 0xE4,             // Set adapter pinout
+    LogicArm = 0xE5,              // Logic analyzer arm
+    LogicCapture = 0xE6,          // Logic analyzer capture
+    LogicGetData = 0xE7,          // Logic analyzer get data
+    JtagScan = 0xE8,              // JTAG scan chain
+    JtagTransfer = 0xE9,          // JTAG transfer
+    SwdConnect = 0xEA,            // SWD connect
+    SwdTransfer = 0xEB,           // SWD read/write
+    OledUpdate = 0xEC,            // OLED display update
+    SetVoltage = 0xED,            // Set voltage level
+    BgaControl = 0xEE,            // BGA station control
+    HardwareStatus = 0xEF,        // Get hardware status
 }
 
 impl Command {
@@ -290,6 +308,24 @@ impl Command {
             0xDD => Some(Command::ProductionStatus),
             0xDE => Some(Command::ProductionStats),
             0xDF => Some(Command::ApiKeyValidate),
+            
+            // Hardware Expansion (v2.1)
+            0xE0 => Some(Command::PcbDetect),
+            0xE1 => Some(Command::PcbCapabilities),
+            0xE2 => Some(Command::SetSocket),
+            0xE3 => Some(Command::AdapterInfo),
+            0xE4 => Some(Command::SetPinout),
+            0xE5 => Some(Command::LogicArm),
+            0xE6 => Some(Command::LogicCapture),
+            0xE7 => Some(Command::LogicGetData),
+            0xE8 => Some(Command::JtagScan),
+            0xE9 => Some(Command::JtagTransfer),
+            0xEA => Some(Command::SwdConnect),
+            0xEB => Some(Command::SwdTransfer),
+            0xEC => Some(Command::OledUpdate),
+            0xED => Some(Command::SetVoltage),
+            0xEE => Some(Command::BgaControl),
+            0xEF => Some(Command::HardwareStatus),
             
             _ => None,
         }
@@ -443,6 +479,28 @@ impl Command {
             Command::ProductionStatus |
             Command::ProductionStats |
             Command::ApiKeyValidate
+        )
+    }
+    
+    /// Check if command is for hardware expansion features (v2.1)
+    pub fn is_hardware(&self) -> bool {
+        matches!(self,
+            Command::PcbDetect |
+            Command::PcbCapabilities |
+            Command::SetSocket |
+            Command::AdapterInfo |
+            Command::SetPinout |
+            Command::LogicArm |
+            Command::LogicCapture |
+            Command::LogicGetData |
+            Command::JtagScan |
+            Command::JtagTransfer |
+            Command::SwdConnect |
+            Command::SwdTransfer |
+            Command::OledUpdate |
+            Command::SetVoltage |
+            Command::BgaControl |
+            Command::HardwareStatus
         )
     }
 }
@@ -749,5 +807,33 @@ mod tests {
         assert!(!Command::MlIdentify.is_server());
         assert!(!Command::BatchStart.is_server());
         assert!(!Command::Ping.is_server());
+    }
+    
+    #[test]
+    fn test_hardware_command_from_u8() {
+        assert_eq!(Command::from_u8(0xE0), Some(Command::PcbDetect));
+        assert_eq!(Command::from_u8(0xE1), Some(Command::PcbCapabilities));
+        assert_eq!(Command::from_u8(0xE2), Some(Command::SetSocket));
+        assert_eq!(Command::from_u8(0xE5), Some(Command::LogicArm));
+        assert_eq!(Command::from_u8(0xE6), Some(Command::LogicCapture));
+        assert_eq!(Command::from_u8(0xE8), Some(Command::JtagScan));
+        assert_eq!(Command::from_u8(0xEA), Some(Command::SwdConnect));
+        assert_eq!(Command::from_u8(0xEC), Some(Command::OledUpdate));
+        assert_eq!(Command::from_u8(0xEF), Some(Command::HardwareStatus));
+    }
+    
+    #[test]
+    fn test_hardware_command_detection() {
+        assert!(Command::PcbDetect.is_hardware());
+        assert!(Command::PcbCapabilities.is_hardware());
+        assert!(Command::LogicArm.is_hardware());
+        assert!(Command::LogicCapture.is_hardware());
+        assert!(Command::JtagScan.is_hardware());
+        assert!(Command::SwdConnect.is_hardware());
+        assert!(Command::OledUpdate.is_hardware());
+        assert!(Command::HardwareStatus.is_hardware());
+        assert!(!Command::ServerStart.is_hardware());
+        assert!(!Command::MlIdentify.is_hardware());
+        assert!(!Command::Ping.is_hardware());
     }
 }

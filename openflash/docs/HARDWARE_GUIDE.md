@@ -548,3 +548,159 @@ dfu-util -a 0 -s 0x08000000:leave -D firmware.bin
 # Using probe-rs
 probe-rs run --chip STM32F411CEUx target/thumbv7em-none-eabihf/release/openflash-firmware-stm32f4
 ```
+
+
+---
+
+## OpenFlash PCB v1 (v2.1+)
+
+The official OpenFlash PCB combines RP2040 and ESP32 on a single board with all necessary sockets and interfaces.
+
+### PCB Specifications
+
+| Feature | Specification |
+|---------|---------------|
+| Main MCU | RP2040 (Dual Cortex-M0+ @ 133MHz) |
+| WiFi MCU | ESP32-C3 (RISC-V @ 160MHz) |
+| USB | USB-C (USB 2.0 Full Speed) |
+| Display | OLED 128x64 (SSD1306, I2C) |
+| Power | 5V via USB-C, 3.3V/1.8V regulated |
+| Dimensions | 80mm x 60mm |
+| BOM Cost | ~$25 |
+
+### Sockets and Connectors
+
+| Socket | Type | Supported Chips |
+|--------|------|-----------------|
+| TSOP-48 ZIF | Parallel NAND | Samsung, Hynix, Micron, Toshiba |
+| SOP-8 | SPI NAND/NOR | GigaDevice, Winbond, Macronix |
+| BGA-153/169 | eMMC | Samsung, Micron, SanDisk |
+| SD Card | SD/MMC | Any SD card |
+| Debug Header | JTAG/SWD | Target debugging |
+
+### PCB Block Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  OpenFlash PCB v1                                               │
+│                                                                 │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
+│  │   RP2040    │  │  ESP32-C3   │  │   TSOP-48 ZIF Socket    │  │
+│  │  (Main MCU) │  │  (WiFi/BT)  │  │   (Parallel NAND)       │  │
+│  │             │  │             │  │                         │  │
+│  │  - USB      │  │  - WiFi     │  │  - 8/16-bit bus         │  │
+│  │  - GPIO     │  │  - BLE      │  │  - 3.3V/1.8V            │  │
+│  │  - PIO      │  │  - UART     │  │  - Auto-detect pinout   │  │
+│  └──────┬──────┘  └──────┬──────┘  └───────────┬─────────────┘  │
+│         │                │                     │                │
+│         └────────────────┼─────────────────────┘                │
+│                          │                                      │
+│  ┌─────────────┐  ┌──────┴──────┐  ┌─────────────────────────┐  │
+│  │   SOP-8     │  │   USB-C     │  │   OLED 128x64           │  │
+│  │  (SPI NOR)  │  │  + Power    │  │   (Status Display)      │  │
+│  │             │  │             │  │                         │  │
+│  │  - SPI      │  │  - 5V input │  │  - Chip info            │  │
+│  │  - QSPI     │  │  - Data     │  │  - Progress             │  │
+│  └─────────────┘  └─────────────┘  │  - WiFi status          │  │
+│                                    └─────────────────────────┘  │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
+│  │   eMMC      │  │   SD Card   │  │   Debug Header          │  │
+│  │   Socket    │  │   Slot      │  │   (JTAG/SWD)            │  │
+│  │             │  │             │  │                         │  │
+│  │  - BGA-153  │  │  - SD/MMC   │  │  - 10-pin ARM           │  │
+│  │  - BGA-169  │  │  - SDIO     │  │  - Logic analyzer       │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  Power Management                                        │    │
+│  │  - 5V → 3.3V (500mA)                                    │    │
+│  │  - 5V → 1.8V (200mA, switchable)                        │    │
+│  │  - Voltage selection jumper                              │    │
+│  │  - Overcurrent protection                                │    │
+│  └─────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### TSOP-48 Pinout Selection
+
+The PCB supports multiple TSOP-48 pinouts via software configuration:
+
+| Pinout | Chips | Notes |
+|--------|-------|-------|
+| Standard | Most NAND | Default configuration |
+| Samsung | K9F/K9K series | Slightly different WP# |
+| Hynix | HY27 series | Same as standard |
+| Micron | MT29F series | Same as standard |
+| Toshiba | TC58 series | Different WP# location |
+
+### Logic Analyzer Mode
+
+The debug header can be used as a 8-channel logic analyzer:
+
+| Channel | Default Signal | Configurable |
+|---------|----------------|--------------|
+| CH0 | CLE | Yes |
+| CH1 | ALE | Yes |
+| CH2 | WE# | Yes |
+| CH3 | RE# | Yes |
+| CH4 | CE# | Yes |
+| CH5 | R/B# | Yes |
+| CH6 | D0 | Yes |
+| CH7 | D7 | Yes |
+
+**Specifications:**
+- Sample rate: Up to 24 MHz
+- Buffer: 1M samples
+- Trigger: Edge, pattern, protocol
+- Export: VCD, Sigrok/PulseView
+
+### JTAG/SWD Passthrough
+
+The debug header provides JTAG/SWD access for debugging target devices:
+
+| Pin | JTAG | SWD |
+|-----|------|-----|
+| 1 | VTref | VTref |
+| 2 | TMS | SWDIO |
+| 3 | GND | GND |
+| 4 | TCK | SWCLK |
+| 5 | GND | GND |
+| 6 | TDO | SWO |
+| 7 | - | - |
+| 8 | TDI | - |
+| 9 | GND | GND |
+| 10 | nRST | nRST |
+
+### OLED Display
+
+The 128x64 OLED shows:
+- Connected chip information
+- Current operation and progress
+- WiFi connection status
+- Error messages
+
+### WiFi Operation
+
+1. Power on the PCB
+2. Connect to "OpenFlash-XXXX" WiFi (password: openflash)
+3. Open http://192.168.4.1 in browser
+4. Or configure to connect to your WiFi network
+
+### Assembly Notes
+
+1. **Solder order**: SMD components first, then sockets
+2. **ZIF socket**: Align pin 1 marker carefully
+3. **OLED**: Use pin headers for easy replacement
+4. **Test points**: Check 3.3V and 1.8V rails before inserting chips
+
+### Gerber Files
+
+Available in the `hardware/pcb/` directory:
+- `openflash-pcb-v1-gerbers.zip` - For PCB fabrication
+- `openflash-pcb-v1-bom.csv` - Bill of materials
+- `openflash-pcb-v1-schematic.pdf` - Circuit schematic
+- `openflash-pcb-v1-assembly.pdf` - Assembly guide
+
+---
+
+*Last updated: January 2027 (v2.1)*

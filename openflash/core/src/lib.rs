@@ -11,6 +11,7 @@ pub mod write_ops;
 pub mod scripting;
 pub mod ai_advanced;
 pub mod server;
+pub mod hardware;
 
 pub use onfi::*;
 pub use protocol::*;
@@ -97,5 +98,21 @@ pub use server::{
     // Production Line
     ProductionLineConfig, StationConfig, StationOperation, PassCriteria,
     VerificationMode, ProductionLogging, ProductionUnitResult, ProductionStats,
+};
+pub use hardware::{
+    HardwareError, HardwareResult, HardwareCommand,
+    // PCB
+    PcbRevision, SocketType, OpenFlashPcb, PcbCapabilities, PcbStatus,
+    // TSOP-48 Adapter
+    Tsop48Pinout, Tsop48Adapter, Tsop48PinMapping, VoltageLevel, BusWidth,
+    // BGA Rework
+    BgaStationType, BgaReworkStation, BgaProfile,
+    // Logic Analyzer
+    TriggerType, LogicChannel, LogicAnalyzerConfig, LogicCapture,
+    LogicAnalyzer, LogicAnalyzerState,
+    // JTAG/SWD
+    JtagState, JtagDevice, JtagController, SwdController,
+    // OLED
+    OledType, OledDisplay,
 };
 

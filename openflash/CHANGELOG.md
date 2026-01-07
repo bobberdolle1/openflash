@@ -7,6 +7,147 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2027-Q1
+
+### Added
+- **Hardware Expansion Features**
+  - New `hardware` module in core library for official PCB and adapters
+  
+  - **OpenFlash PCB v1**
+    - `OpenFlashPcb` - Official PCB configuration and detection
+    - `PcbRevision` - PCB revision tracking (RevA, RevB, RevC)
+    - `PcbCapabilities` - Feature detection for PCB
+    - `PcbStatus` - Status display for OLED
+    - RP2040 + ESP32 combo design
+    - USB-C + WiFi connectivity
+    - ~$25 BOM target
+  
+  - **TSOP-48 ZIF Adapter Board**
+    - `Tsop48Adapter` - Adapter configuration
+    - `Tsop48Pinout` - Pinout variants (Standard, Samsung, Hynix, Micron, Toshiba)
+    - `Tsop48PinMapping` - Pin mapping for different chip types
+    - `VoltageLevel` - 3.3V and 1.8V support
+    - `BusWidth` - 8-bit and 16-bit bus support
+    - `SocketType` - Socket type detection (TSOP-48, SOP-8, BGA, eMMC, SD)
+  
+  - **BGA Rework Station Integration**
+    - `BgaReworkStation` - Station control and monitoring
+    - `BgaStationType` - Support for Generic IR, Hot Air, JBC, Quick, Hakko
+    - `BgaProfile` - Temperature profiles (lead-free SAC305, leaded Sn63/Pb37)
+    - Temperature monitoring and control
+    - Reflow profile management
+  
+  - **Logic Analyzer Mode**
+    - `LogicAnalyzer` - Logic analyzer controller
+    - `LogicAnalyzerConfig` - Sample rate, buffer, channels configuration
+    - `LogicChannel` - Per-channel settings with triggers
+    - `LogicCapture` - Capture results with export
+    - `TriggerType` - Rising/Falling/Any edge, Pattern, Protocol triggers
+    - Up to 24 MHz sample rate
+    - VCD and Sigrok export formats
+    - NAND and SPI protocol presets
+  
+  - **JTAG/SWD Passthrough**
+    - `JtagController` - JTAG TAP state machine
+    - `JtagDevice` - Device detection with IDCODE parsing
+    - `JtagState` - Full TAP state machine (16 states)
+    - `SwdController` - SWD debug interface
+    - Chain scanning and device identification
+    - Memory read/write via debug interface
+    - Halt/Resume target control
+  
+  - **OLED Display Support**
+    - `OledDisplay` - Display controller
+    - `OledType` - SSD1306 128x64/128x32, SH1106 128x64
+    - Status screen rendering
+    - Progress bar display
+    - I2C communication (0x3C default address)
+
+- **New Protocol Commands (0xE0-0xEF)**
+  - `PcbDetect` (0xE0) - Detect PCB and get info
+  - `PcbCapabilities` (0xE1) - Get PCB capabilities
+  - `SetSocket` (0xE2) - Set socket type
+  - `AdapterInfo` (0xE3) - Get adapter info
+  - `SetPinout` (0xE4) - Set adapter pinout
+  - `LogicArm` (0xE5) - Logic analyzer arm
+  - `LogicCapture` (0xE6) - Logic analyzer capture
+  - `LogicGetData` (0xE7) - Logic analyzer get data
+  - `JtagScan` (0xE8) - JTAG scan chain
+  - `JtagTransfer` (0xE9) - JTAG transfer
+  - `SwdConnect` (0xEA) - SWD connect
+  - `SwdTransfer` (0xEB) - SWD read/write
+  - `OledUpdate` (0xEC) - OLED display update
+  - `SetVoltage` (0xED) - Set voltage level
+  - `BgaControl` (0xEE) - BGA station control
+  - `HardwareStatus` (0xEF) - Get hardware status
+
+- **New CLI Commands**
+  - `openflash pcb detect` - Detect OpenFlash PCB
+  - `openflash pcb info` - Get PCB information
+  - `openflash adapter info` - Get adapter information
+  - `openflash adapter pinout <type>` - Set adapter pinout
+  - `openflash logic arm [--trigger] [--rate]` - Arm logic analyzer
+  - `openflash logic capture -o <file>` - Capture and save
+  - `openflash logic preset <nand|spi>` - Load protocol preset
+  - `openflash jtag scan` - Scan JTAG chain
+  - `openflash jtag read <addr> <len>` - Read via JTAG
+  - `openflash swd connect` - Connect via SWD
+  - `openflash swd read <addr> <len>` - Read memory via SWD
+  - `openflash oled status` - Show status on OLED
+  - `openflash oled progress <percent>` - Show progress bar
+
+- **New Types and Structures**
+  - `HardwareError`, `HardwareResult` - Error handling
+  - `HardwareCommand` - Protocol command enum
+  - PCB types: `PcbRevision`, `SocketType`, `OpenFlashPcb`, `PcbCapabilities`
+  - Adapter types: `Tsop48Pinout`, `Tsop48Adapter`, `Tsop48PinMapping`
+  - BGA types: `BgaStationType`, `BgaReworkStation`, `BgaProfile`
+  - Logic analyzer: `TriggerType`, `LogicChannel`, `LogicAnalyzerConfig`, `LogicCapture`
+  - Debug: `JtagState`, `JtagDevice`, `JtagController`, `SwdController`
+  - Display: `OledType`, `OledDisplay`, `PcbStatus`
+
+### Changed
+- Protocol version updated to 0x21
+- Core library version updated to 2.1.0
+- CLI version: 2.1.0
+- pyopenflash version: 2.1.0
+- Added `is_hardware()` method to Command enum
+- Extended lib.rs exports with hardware types
+
+### Tests
+- 14 new unit tests for hardware module
+- PCB revision and capabilities tests
+- TSOP-48 pin mapping tests
+- Logic analyzer preset tests
+- JTAG IDCODE parsing tests
+- SWD controller tests
+- OLED dimensions tests
+- BGA profile tests
+- Hardware command tests
+
+### Hardware Design
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  OpenFlash PCB v1                                               │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
+│  │   RP2040    │  │   ESP32     │  │   TSOP-48 ZIF Socket    │  │
+│  │  (Main MCU) │  │  (WiFi/BT)  │  │   (Parallel NAND)       │  │
+│  └──────┬──────┘  └──────┬──────┘  └───────────┬─────────────┘  │
+│         │                │                     │                │
+│         └────────────────┼─────────────────────┘                │
+│                          │                                      │
+│  ┌─────────────┐  ┌──────┴──────┐  ┌─────────────────────────┐  │
+│  │  SOP-8      │  │   USB-C     │  │   OLED 128x64           │  │
+│  │  (SPI NOR)  │  │  + Power    │  │   (Status Display)      │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
+│                                                                 │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
+│  │  eMMC       │  │  SD Card    │  │   Debug Header          │  │
+│  │  Socket     │  │  Slot       │  │   (JTAG/SWD)            │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
 ## [2.0.0] - 2026-Q4
 
 ### Added
@@ -665,6 +806,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
+- **2.1.0** - Hardware Expansion: Official PCB, TSOP-48 ZIF adapter, logic analyzer, JTAG/SWD passthrough
 - **2.0.0** - Multi-device & Enterprise: Server mode, device pool, job queue, REST API, parallel dumping, production line
 - **1.9.0** - Advanced AI Features: ML chip identification, firmware unpacking, rootfs extraction, vulnerability scanning
 - **1.8.0** - Scripting & Automation: Python API, CLI tool, batch processing, plugins, CI/CD
@@ -679,7 +821,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **1.0.0** - Initial public release
 - **0.x.x** - Development versions (not released)
 
-[Unreleased]: https://github.com/openflash/openflash/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/openflash/openflash/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/openflash/openflash/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/openflash/openflash/compare/v1.9.0...v2.0.0
 [1.9.0]: https://github.com/openflash/openflash/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/openflash/openflash/compare/v1.7.0...v1.8.0

@@ -21,7 +21,7 @@ mod commands;
 #[derive(Parser)]
 #[command(name = "openflash")]
 #[command(author = "OpenFlash Team")]
-#[command(version = "1.8.0")]
+#[command(version = "1.9.0")]
 #[command(about = "Command-line interface for flash programming and analysis")]
 #[command(long_about = None)]
 struct Cli {
@@ -217,6 +217,72 @@ enum Commands {
         #[command(subcommand)]
         action: ConfigAction,
     },
+    
+    /// Unpack firmware (binwalk-like)
+    Unpack {
+        /// Input dump file
+        input: PathBuf,
+        
+        /// Output directory
+        #[arg(short, long)]
+        output: PathBuf,
+        
+        /// Maximum extraction depth
+        #[arg(long, default_value = "5")]
+        depth: u32,
+        
+        /// Recursive extraction
+        #[arg(long, default_value = "true")]
+        recursive: bool,
+    },
+    
+    /// Extract root filesystem
+    Rootfs {
+        /// Input dump file
+        input: PathBuf,
+        
+        /// Output directory
+        #[arg(short, long)]
+        output: PathBuf,
+        
+        /// Extract file contents
+        #[arg(long, default_value = "true")]
+        contents: bool,
+    },
+    
+    /// Scan for vulnerabilities
+    Vulnscan {
+        /// Input dump file
+        input: PathBuf,
+        
+        /// Output report file
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        
+        /// Check for hardcoded credentials
+        #[arg(long, default_value = "true")]
+        credentials: bool,
+        
+        /// Check for weak crypto
+        #[arg(long, default_value = "true")]
+        weak_crypto: bool,
+    },
+    
+    /// ML-based chip identification
+    Identify {
+        /// Input dump file
+        input: PathBuf,
+        
+        /// Show top N predictions
+        #[arg(long, default_value = "3")]
+        top: usize,
+    },
+    
+    /// Custom signature operations
+    Signatures {
+        #[command(subcommand)]
+        action: SignaturesAction,
+    },
 }
 
 #[derive(Subcommand)]
@@ -232,6 +298,30 @@ enum ConfigAction {
     Reset,
 }
 
+#[derive(Subcommand)]
+enum SignaturesAction {
+    /// Load custom signatures from file
+    Load {
+        /// Signature file (YAML format)
+        file: PathBuf,
+    },
+    /// Scan dump with custom signatures
+    Scan {
+        /// Input dump file
+        input: PathBuf,
+        /// Signature file (optional, uses loaded)
+        #[arg(short, long)]
+        signatures: Option<PathBuf>,
+    },
+    /// Export signature database
+    Export {
+        /// Output file
+        output: PathBuf,
+    },
+    /// List loaded signatures
+    List,
+}
+
 
 fn main() {
     let cli = Cli::parse();
@@ -240,48 +330,68 @@ fn main() {
         print_banner();
     }
 
-    let result = match cli.command {
+    let result = match &cli.command {
         Commands::Scan => commands::scan(&cli),
         Commands::Detect => commands::detect(&cli),
         Commands::Read { output, start, length, oob, skip_bad } => {
-            commands::read(&cli, output, &start, length.as_deref(), oob, skip_bad)
+            commands::read(&cli, output.clone(), start, length.as_deref(), *oob, *skip_bad)
         }
         Commands::Write { input, start, verify, erase, skip_bad } => {
-            commands::write(&cli, input, &start, verify, erase, skip_bad)
+            commands::write(&cli, input.clone(), start, *verify, *erase, *skip_bad)
         }
         Commands::Erase { start, length, force } => {
-            commands::erase(&cli, start.as_deref(), length.as_deref(), force)
+            commands::erase(&cli, start.as_deref(), length.as_deref(), *force)
         }
         Commands::Verify { file, start } => {
-            commands::verify(&cli, file, &start)
+            commands::verify(&cli, file.clone(), start)
         }
         Commands::Analyze { input, output, deep, report_format } => {
-            commands::analyze(&cli, input, output, deep, &report_format)
+            commands::analyze(&cli, input.clone(), output.clone(), *deep, report_format)
         }
         Commands::Compare { file1, file2, output } => {
-            commands::compare(&cli, file1, file2, output)
+            commands::compare(&cli, file1.clone(), file2.clone(), output.clone())
         }
         Commands::Clone { mode, verify } => {
-            commands::clone_chip(&cli, &mode, verify)
+            commands::clone_chip(&cli, mode, *verify)
         }
         Commands::Batch { file, stop_on_error } => {
-            commands::batch(&cli, file, stop_on_error)
+            commands::batch(&cli, file.clone(), *stop_on_error)
         }
         Commands::Script { file, args } => {
-            commands::script(&cli, file, args)
+            commands::script(&cli, file.clone(), args.clone())
         }
         Commands::Chips { interface, manufacturer, search } => {
-            commands::list_chips(&cli, interface, manufacturer, search)
+            commands::list_chips(&cli, interface.clone(), manufacturer.clone(), search.clone())
         }
         Commands::Info => commands::info(&cli),
         Commands::Interface { interface } => {
-            commands::set_interface(&cli, &interface)
+            commands::set_interface(&cli, interface)
         }
         Commands::Config { action } => {
             match action {
                 ConfigAction::Show => commands::config_show(&cli),
-                ConfigAction::Set { key, value } => commands::config_set(&cli, &key, &value),
+                ConfigAction::Set { key, value } => commands::config_set(&cli, key, value),
                 ConfigAction::Reset => commands::config_reset(&cli),
+            }
+        }
+        Commands::Unpack { input, output, depth, recursive } => {
+            commands::unpack(&cli, input.clone(), output.clone(), *depth, *recursive)
+        }
+        Commands::Rootfs { input, output, contents } => {
+            commands::rootfs(&cli, input.clone(), output.clone(), *contents)
+        }
+        Commands::Vulnscan { input, output, credentials, weak_crypto } => {
+            commands::vulnscan(&cli, input.clone(), output.clone(), *credentials, *weak_crypto)
+        }
+        Commands::Identify { input, top } => {
+            commands::identify(&cli, input.clone(), *top)
+        }
+        Commands::Signatures { action } => {
+            match action {
+                SignaturesAction::Load { file } => commands::signatures_load(&cli, file.clone()),
+                SignaturesAction::Scan { input, signatures } => commands::signatures_scan(&cli, input.clone(), signatures.clone()),
+                SignaturesAction::Export { output } => commands::signatures_export(&cli, output.clone()),
+                SignaturesAction::List => commands::signatures_list(&cli),
             }
         }
     };
@@ -303,7 +413,7 @@ fn print_banner() {
  | |__| | |_) |  __/ | | | |   | | (_| \__ \ | | |
   \____/| .__/ \___|_| |_\_|   |_|\__,_|___/_| |_|
         | |                                       
-        |_|   v1.8.0 - Scripting & Automation     
+        |_|   v1.9.0 - Advanced AI Features     
 "#.cyan());
 }
 

@@ -122,6 +122,18 @@ pub enum Command {
     RemoteConnect = 0xB9,         // Remote connection (server mode)
     RemoteDisconnect = 0xBA,      // Disconnect remote
     GetDeviceInfo = 0xBB,         // Get detailed device info
+    
+    // Advanced AI Commands (0xC0-0xC9) - v1.9
+    MlIdentify = 0xC0,            // ML-based chip identification
+    UnpackFirmware = 0xC1,        // Start firmware unpacking
+    UnpackStatus = 0xC2,          // Get unpacking progress
+    ExtractRootfs = 0xC3,         // Extract root filesystem
+    VulnScan = 0xC4,              // Start vulnerability scan
+    VulnResults = 0xC5,           // Get vulnerability results
+    LoadSignatures = 0xC6,        // Load custom signatures
+    ScanSignatures = 0xC7,        // Scan with custom signatures
+    ExportSignatures = 0xC8,      // Export signature database
+    GetMlModel = 0xC9,            // Get ML model info
 }
 
 impl Command {
@@ -230,6 +242,18 @@ impl Command {
             0xB9 => Some(Command::RemoteConnect),
             0xBA => Some(Command::RemoteDisconnect),
             0xBB => Some(Command::GetDeviceInfo),
+            
+            // Advanced AI (v1.9)
+            0xC0 => Some(Command::MlIdentify),
+            0xC1 => Some(Command::UnpackFirmware),
+            0xC2 => Some(Command::UnpackStatus),
+            0xC3 => Some(Command::ExtractRootfs),
+            0xC4 => Some(Command::VulnScan),
+            0xC5 => Some(Command::VulnResults),
+            0xC6 => Some(Command::LoadSignatures),
+            0xC7 => Some(Command::ScanSignatures),
+            0xC8 => Some(Command::ExportSignatures),
+            0xC9 => Some(Command::GetMlModel),
             
             _ => None,
         }
@@ -345,6 +369,22 @@ impl Command {
             Command::RemoteConnect |
             Command::RemoteDisconnect |
             Command::GetDeviceInfo
+        )
+    }
+    
+    /// Check if command is for advanced AI features (v1.9)
+    pub fn is_ai_advanced(&self) -> bool {
+        matches!(self,
+            Command::MlIdentify |
+            Command::UnpackFirmware |
+            Command::UnpackStatus |
+            Command::ExtractRootfs |
+            Command::VulnScan |
+            Command::VulnResults |
+            Command::LoadSignatures |
+            Command::ScanSignatures |
+            Command::ExportSignatures |
+            Command::GetMlModel
         )
     }
 }
@@ -599,5 +639,31 @@ mod tests {
         assert!(!Command::FullChipProgram.is_scripting());
         assert!(!Command::SpiNorRead.is_scripting());
         assert!(!Command::Ping.is_scripting());
+    }
+    
+    #[test]
+    fn test_ai_advanced_command_from_u8() {
+        assert_eq!(Command::from_u8(0xC0), Some(Command::MlIdentify));
+        assert_eq!(Command::from_u8(0xC1), Some(Command::UnpackFirmware));
+        assert_eq!(Command::from_u8(0xC2), Some(Command::UnpackStatus));
+        assert_eq!(Command::from_u8(0xC3), Some(Command::ExtractRootfs));
+        assert_eq!(Command::from_u8(0xC4), Some(Command::VulnScan));
+        assert_eq!(Command::from_u8(0xC5), Some(Command::VulnResults));
+        assert_eq!(Command::from_u8(0xC6), Some(Command::LoadSignatures));
+        assert_eq!(Command::from_u8(0xC7), Some(Command::ScanSignatures));
+        assert_eq!(Command::from_u8(0xC8), Some(Command::ExportSignatures));
+        assert_eq!(Command::from_u8(0xC9), Some(Command::GetMlModel));
+    }
+    
+    #[test]
+    fn test_ai_advanced_command_detection() {
+        assert!(Command::MlIdentify.is_ai_advanced());
+        assert!(Command::UnpackFirmware.is_ai_advanced());
+        assert!(Command::ExtractRootfs.is_ai_advanced());
+        assert!(Command::VulnScan.is_ai_advanced());
+        assert!(Command::LoadSignatures.is_ai_advanced());
+        assert!(!Command::BatchStart.is_ai_advanced());
+        assert!(!Command::SpiNorRead.is_ai_advanced());
+        assert!(!Command::Ping.is_ai_advanced());
     }
 }

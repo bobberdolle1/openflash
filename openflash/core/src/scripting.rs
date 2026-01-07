@@ -35,6 +35,26 @@ pub enum ScriptError {
     InvalidConfig(String),
 }
 
+impl std::fmt::Display for ScriptError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ConnectionFailed(s) => write!(f, "Connection failed: {}", s),
+            Self::NotConnected => write!(f, "Device not connected"),
+            Self::InvalidOperation(s) => write!(f, "Invalid operation: {}", s),
+            Self::ReadFailed { address, reason } => write!(f, "Read failed at 0x{:X}: {}", address, reason),
+            Self::WriteFailed { address, reason } => write!(f, "Write failed at 0x{:X}: {}", address, reason),
+            Self::AnalysisFailed(s) => write!(f, "Analysis failed: {}", s),
+            Self::PluginError { plugin, message } => write!(f, "Plugin '{}' error: {}", plugin, message),
+            Self::BatchError { job_id, message } => write!(f, "Batch job {} error: {}", job_id, message),
+            Self::ScriptExecutionError(s) => write!(f, "Script execution error: {}", s),
+            Self::ExportFailed(s) => write!(f, "Export failed: {}", s),
+            Self::InvalidConfig(s) => write!(f, "Invalid config: {}", s),
+        }
+    }
+}
+
+impl std::error::Error for ScriptError {}
+
 pub type ScriptResult<T> = Result<T, ScriptError>;
 
 // ============================================================================

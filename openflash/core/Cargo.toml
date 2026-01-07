@@ -1,6 +1,6 @@
 [package]
 name = "openflash-core"
-version = "1.8.0"
+version = "1.9.0"
 edition = "2021"
 description = "Core library for OpenFlash NAND/eMMC programmer"
 license = "MIT"

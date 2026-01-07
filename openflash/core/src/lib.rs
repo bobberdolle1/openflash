@@ -9,6 +9,7 @@ pub mod ufs;
 pub mod ai;
 pub mod write_ops;
 pub mod scripting;
+pub mod ai_advanced;
 
 pub use onfi::*;
 pub use protocol::*;
@@ -59,5 +60,19 @@ pub use scripting::{
     CliCommand, CliOutputFormat, CliConfig,
     CiJobConfig, CiOperation, CiArtifact, CiArtifactType, CiJobResult, CiOperationResult,
     OpenFlash,
+};
+pub use ai_advanced::{
+    AiAdvancedError, AiAdvancedResult,
+    // ML Chip Identification
+    MlChipIdentifier, ChipPrediction, FeatureVector, MlModelInfo,
+    // Firmware Unpacking
+    FirmwareUnpacker, UnpackResult, ExtractedSection, CompressionFormat, ArchiveFormat,
+    // Rootfs Extraction
+    RootfsExtractor, RootfsResult, ExtractedFile, FilesystemType,
+    // Vulnerability Scanning
+    VulnScanner, VulnScanResult, Vulnerability, CvssScore, Severity,
+    // Custom Signatures
+    SignatureDatabase, CustomSignature, SignatureMatch, SignatureCategory, PatternType,
+    SignatureDatabaseInfo,
 };
 

@@ -611,12 +611,26 @@ v1.8  ✅  Scripting & Automation
           ├── Custom analysis plugins
           └── CI/CD integration
 
+v1.9  ✅  Advanced AI Features
+          ├── ML-based chip identification
+          ├── Firmware unpacking (binwalk)
+          ├── Automatic rootfs extraction
+          ├── Vulnerability scanning
+          └── Custom signature database
+
 v2.0  ✅  Multi-device & Enterprise
           ├── Multi-device parallel dumping
           ├── Device farm management
           ├── Remote operation (server mode)
           ├── Production line integration
           └── REST API
+
+v2.1  ✅  Hardware Expansion
+          ├── Official OpenFlash PCB (~$25 BOM)
+          ├── TSOP-48 ZIF adapter board
+          ├── BGA rework station integration
+          ├── Logic analyzer mode (24 MHz)
+          └── JTAG/SWD passthrough
 
 v2.2  ✅  Expanded Chip Database
           ├── 150+ new chips across all flash types

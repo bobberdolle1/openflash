@@ -767,7 +767,7 @@ impl AiAnalyzer {
         let mut anomalies = Vec::new();
         let mut suspicious_pages = 0;
 
-        for (page_num, page) in data.chunks(self.page_size).enumerate() {
+        for page in data.chunks(self.page_size) {
             // Count bytes that are almost 0xFF (single bit flip)
             let almost_ff = page
                 .iter()
@@ -1139,10 +1139,10 @@ impl AiAnalyzer {
             score -= 0.2;
         }
 
-        score.max(0.0).min(1.0)
+        score.clamp(0.0, 1.0)
     }
 
-    fn estimate_encryption_probability(&self, data: &[u8], patterns: &[DetectedPattern]) -> f32 {
+    fn estimate_encryption_probability(&self, _data: &[u8], patterns: &[DetectedPattern]) -> f32 {
         let encrypted_bytes: usize = patterns
             .iter()
             .filter(|p| p.pattern_type == PatternType::Encrypted)
@@ -1162,7 +1162,7 @@ impl AiAnalyzer {
         (encrypted_bytes as f32 / total_data_bytes as f32).min(1.0)
     }
 
-    fn estimate_compression_probability(&self, data: &[u8], patterns: &[DetectedPattern]) -> f32 {
+    fn estimate_compression_probability(&self, _data: &[u8], patterns: &[DetectedPattern]) -> f32 {
         let compressed_bytes: usize = patterns
             .iter()
             .filter(|p| p.pattern_type == PatternType::Compressed)
@@ -1676,7 +1676,7 @@ impl AiAnalyzer {
     pub fn analyze_wear_leveling(
         &self,
         data: &[u8],
-        patterns: &[DetectedPattern],
+        _patterns: &[DetectedPattern],
     ) -> Option<WearAnalysis> {
         let block_bytes = self.page_size * self.block_size;
         let num_blocks = data.len() / block_bytes;
@@ -1775,7 +1775,7 @@ impl AiAnalyzer {
                 avg_erases,
                 std_deviation,
             },
-            estimated_remaining_life_percent: remaining_life.max(0.0).min(100.0),
+            estimated_remaining_life_percent: remaining_life.clamp(0.0, 100.0),
             recommendations,
         })
     }
@@ -1869,7 +1869,7 @@ impl AiAnalyzer {
 
         // Look for U-Boot environment
         for offset in (0..data.len().saturating_sub(4)).step_by(self.page_size) {
-            if &data[offset..offset + 4] == [0x27, 0x05, 0x19, 0x56] {
+            if data[offset..offset + 4] == [0x27, 0x05, 0x19, 0x56] {
                 partitions.push(PartitionInfo {
                     name: "U-Boot Image".to_string(),
                     offset,

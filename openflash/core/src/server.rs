@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 // ============================================================================
 // Error Types
@@ -96,6 +96,9 @@ pub enum DevicePlatform {
 }
 
 impl DevicePlatform {
+    // Not `std::str::FromStr`: parsing is infallible here, an unrecognised name
+    // maps to `Unknown` rather than an error, and the name is public API.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
         match s.to_uppercase().as_str() {
             "RP2040" => Self::RP2040,
@@ -375,18 +378,13 @@ pub fn generate_job_id() -> u64 {
 }
 
 /// Job priority levels
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Default)]
 pub enum JobPriority {
     Low = 0,
+    #[default]
     Normal = 1,
     High = 2,
     Critical = 3,
-}
-
-impl Default for JobPriority {
-    fn default() -> Self {
-        Self::Normal
-    }
 }
 
 /// Job status
@@ -637,7 +635,7 @@ impl Job {
 }
 
 /// Job result data
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct JobResult {
     /// Bytes processed
     pub bytes_processed: u64,
@@ -655,21 +653,6 @@ pub struct JobResult {
     pub checksum: Option<String>,
     /// Additional data
     pub data: HashMap<String, String>,
-}
-
-impl Default for JobResult {
-    fn default() -> Self {
-        Self {
-            bytes_processed: 0,
-            pages_processed: 0,
-            blocks_processed: 0,
-            ecc_corrections: 0,
-            bad_blocks: Vec::new(),
-            output_path: None,
-            checksum: None,
-            data: HashMap::new(),
-        }
-    }
 }
 
 /// Job queue manager

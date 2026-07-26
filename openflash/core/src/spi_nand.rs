@@ -927,6 +927,12 @@ pub fn calculate_row_address(block: u32, page_in_block: u32, pages_per_block: u3
 }
 
 /// Calculate column address (byte offset within page)
+///
+/// Both branches currently return the offset unchanged: on every SPI NAND part
+/// supported so far the OOB area is addressed as a linear continuation of the
+/// page, so no translation is needed. The branch is kept because parts that
+/// place the OOB in a separate address window need a different mapping here.
+#[allow(clippy::if_same_then_else)]
 pub fn calculate_column_address(offset: u16, include_oob: bool, page_size: u16) -> u16 {
     if include_oob && offset >= page_size {
         offset // OOB area

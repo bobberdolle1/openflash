@@ -135,11 +135,15 @@ function App() {
     }
   }, [analysis]);
 
-  const enableMock = useCallback(async () => {
+  // The emulator is an ordinary device in the list, so "demo mode" is just a
+  // connection to it. It speaks the real protocol against an in-memory chip, so
+  // the UI exercises the same code path as it does with hardware.
+  const useEmulator = useCallback(async () => {
     try {
-      await invoke("enable_mock_mode");
+      await invoke("scan_devices");
+      await invoke("connect_device", { deviceId: "emulated" });
       setMockEnabled(true);
-      setStatus("Mock mode enabled");
+      setStatus("Connected to the emulated chip (no hardware)");
       await scanDevices();
     } catch (e) {
       setStatus(`Error: ${e}`);
@@ -237,21 +241,23 @@ function App() {
       );
       const chunkSize = 64;
 
-      const allData = new Uint8Array(totalPages * pageSize);
+      const total = totalPages * pageSize;
+      const bytesPerRequest = chunkSize * pageSize;
+
+      const allData = new Uint8Array(total);
       let offset = 0;
 
-      for (let page = 0; page < totalPages; page += chunkSize) {
-        const numPages = Math.min(chunkSize, totalPages - page);
-        const data = await invoke<number[]>("dump_nand", {
-          startPage: page,
-          numPages,
-          pageSize,
+      while (offset < total) {
+        const length = Math.min(bytesPerRequest, total - offset);
+        const data = await invoke<number[]>("dump_range", {
+          startAddress: offset,
+          length,
         });
 
         allData.set(new Uint8Array(data), offset);
         offset += data.length;
 
-        const progress = Math.round(((page + numPages) / totalPages) * 100);
+        const progress = Math.round((offset / total) * 100);
         setDumpProgress(progress);
         setStatus(`Dumping... ${progress}%`);
       }
@@ -400,7 +406,7 @@ function App() {
                 🌐 Network
               </button>
               {!mockEnabled && (
-                <button onClick={enableMock} className="secondary">
+                <button onClick={useEmulator} className="secondary">
                   🧪 Mock
                 </button>
               )}

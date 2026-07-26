@@ -1,19 +1,22 @@
 [package]
 name = "pyopenflash"
-version = "2.1.0"
-edition = "2021"
-description = "Python bindings for OpenFlash NAND/eMMC programmer"
-license = "MIT"
+description = "Python bindings for the OpenFlash NAND/eMMC/NOR programmer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 
 [lib]
 name = "openflash"
 crate-type = ["cdylib"]
 
 [dependencies]
-openflash-core = { path = "../core" }
-pyo3 = { version = "0.20", features = ["extension-module"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+openflash-core = { workspace = true }
+pyo3 = { version = "0.23", features = ["extension-module"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [features]
-default = []
+default = ["usb"]
+usb = ["openflash-core/usb"]

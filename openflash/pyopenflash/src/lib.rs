@@ -1,93 +1,109 @@
-//! Python bindings for OpenFlash
+//! Python bindings for OpenFlash.
 //!
-//! # Example
+//! Device operations here perform real I/O through `openflash_core`. Previously
+//! `connect()` succeeded unconditionally, `detect()` always answered Samsung
+//! K9F1G08U0E and `read()` returned a buffer of `0xFF`, so a script could not
+//! tell a successful dump from no device at all.
+//!
 //! ```python
 //! import openflash
 //!
-//! # Connect to device
+//! # A real device: the single attached USB programmer, or an SBC agent.
 //! device = openflash.connect()
+//! # No hardware needed; nothing real is read or written.
+//! device = openflash.connect_emulated(2 * 1024 * 1024)
 //!
-//! # Detect chip
 //! chip = device.detect()
-//! print(f"Found: {chip.manufacturer} {chip.model}")
+//! print(f"Found {chip.manufacturer} {chip.model}, {chip.capacity} bytes")
 //!
-//! # Read full dump
 //! dump = device.read_full()
 //! dump.save("dump.bin")
 //!
-//! # AI analysis
 //! analysis = openflash.ai.analyze(dump)
 //! print(f"Quality: {analysis.quality_score:.0%}")
-//! analysis.export_report("report.md")
 //! ```
 
 use openflash_core::scripting::*;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
-use std::collections::HashMap;
 
 // ============================================================================
 // Device Module
 // ============================================================================
 
-/// Device connection and operations
-#[pyclass]
-#[derive(Clone)]
+/// A connected device.
+///
+/// Not constructible directly: use [`connect`], [`connect_tcp`], [`connect_unix`]
+/// or [`connect_emulated`], each of which fails when the device is not there.
+#[pyclass(unsendable)]
 struct Device {
-    inner: Option<DeviceHandle>,
+    inner: OpenFlash,
     last_dump: Option<Dump>,
+}
+
+impl Device {
+    fn open(config: ConnectionConfig) -> PyResult<Self> {
+        let mut inner = OpenFlash::new();
+        inner
+            .connect_with_config(config)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(Self {
+            inner,
+            last_dump: None,
+        })
+    }
 }
 
 #[pymethods]
 impl Device {
-    #[new]
-    fn new() -> Self {
-        Self {
-            inner: None,
-            last_dump: None,
-        }
-    }
-
-    /// Check if connected
+    /// Whether the connection is still open.
     fn is_connected(&self) -> bool {
-        self.inner
-            .as_ref()
-            .map(|d| d.is_connected())
-            .unwrap_or(false)
+        self.inner.is_connected()
     }
 
-    /// Get device info
+    /// Close the connection.
+    fn disconnect(&mut self) {
+        self.inner.disconnect();
+    }
+
+    /// What the device reported about itself at connect time.
     fn info(&self) -> PyResult<PyDeviceInfo> {
-        let handle = self
-            .inner
-            .as_ref()
-            .ok_or_else(|| PyRuntimeError::new_err("Not connected"))?;
-        Ok(PyDeviceInfo::from(&handle.info))
+        self.inner
+            .device_info()
+            .map(PyDeviceInfo::from)
+            .ok_or_else(|| PyRuntimeError::new_err("Not connected"))
     }
 
-    /// Detect connected chip
-    fn detect(&self) -> PyResult<ChipInfo> {
-        if !self.is_connected() {
-            return Err(PyRuntimeError::new_err("Not connected"));
-        }
-        // Mock detection
+    /// Refuse any operation that would modify the chip.
+    fn set_read_only(&mut self, read_only: bool) -> PyResult<()> {
+        self.inner
+            .set_read_only(read_only)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
+    /// Read the chip id off the bus and look it up in the database.
+    fn detect(&mut self) -> PyResult<ChipInfo> {
+        let chip = self
+            .inner
+            .detect_chip()
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(ChipInfo {
-            manufacturer: "Samsung".to_string(),
-            model: "K9F1G08U0E".to_string(),
-            capacity: 128 * 1024 * 1024,
-            page_size: 2048,
-            block_size: 128 * 1024,
-            oob_size: 64,
-            interface: "parallel_nand".to_string(),
+            manufacturer: chip.manufacturer,
+            model: chip.model,
+            capacity: chip.capacity,
+            page_size: chip.page_size,
+            block_size: chip.block_size,
+            oob_size: chip.oob_size,
+            interface: chip.interface,
         })
     }
 
-    /// Read full chip
+    /// Dump the whole chip.
     fn read_full(&mut self) -> PyResult<Dump> {
         self.read(None, None, false)
     }
 
-    /// Read chip with options
+    /// Dump part of the chip.
     #[pyo3(signature = (start=None, length=None, include_oob=false))]
     fn read(
         &mut self,
@@ -95,81 +111,89 @@ impl Device {
         length: Option<u64>,
         include_oob: bool,
     ) -> PyResult<Dump> {
-        if !self.is_connected() {
-            return Err(PyRuntimeError::new_err("Not connected"));
-        }
-
         let chip = self.detect()?;
-        let len = length.unwrap_or(chip.capacity);
+        let result = self
+            .inner
+            .read_with_options(ReadOptions {
+                start_address: start.unwrap_or(0),
+                length,
+                include_oob,
+                ..ReadOptions::default()
+            })
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
         let dump = Dump {
-            data: vec![0xFF; len as usize],
-            oob_data: if include_oob {
-                Some(vec![
-                    0xFF;
-                    (len / chip.page_size as u64 * chip.oob_size as u64)
-                        as usize
-                ])
-            } else {
-                None
-            },
+            data: result.data.clone(),
+            oob_data: result.oob_data.clone(),
             chip_info: Some(chip),
-            bad_blocks: vec![],
+            bad_blocks: result.bad_blocks.clone(),
         };
-
         self.last_dump = Some(dump.clone());
         Ok(dump)
     }
 
-    /// Write data to chip
+    /// Write `data` at `start`, erasing the affected sectors first and verifying
+    /// afterwards unless told otherwise.
     #[pyo3(signature = (data, start=0, verify=true, erase=true))]
-    fn write(&self, data: Vec<u8>, start: u64, verify: bool, erase: bool) -> PyResult<WriteResult> {
-        if !self.is_connected() {
-            return Err(PyRuntimeError::new_err("Not connected"));
-        }
+    fn write(
+        &mut self,
+        data: Vec<u8>,
+        start: u64,
+        verify: bool,
+        erase: bool,
+    ) -> PyResult<WriteResult> {
+        let report = self
+            .inner
+            .write(
+                &data,
+                WriteOptions {
+                    start_address: start,
+                    verify,
+                    erase_before_write: erase,
+                    ..WriteOptions::default()
+                },
+            )
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
         Ok(WriteResult {
-            bytes_written: data.len() as u64,
-            verified: verify,
-            duration_ms: 1000,
+            bytes_written: report.bytes_written,
+            pages_written: report.pages_written as u32,
+            verified: report.verified,
+            sectors_erased: report.sectors_erased,
         })
     }
 
-    /// Erase chip
-    #[pyo3(signature = (start=None, length=None))]
-    fn erase(&self, start: Option<u64>, length: Option<u64>) -> PyResult<()> {
-        if !self.is_connected() {
-            return Err(PyRuntimeError::new_err("Not connected"));
+    /// Erase whole sectors covering the range. Returns the sector count.
+    fn erase(&mut self, start: u64, length: u64) -> PyResult<u64> {
+        self.inner
+            .erase(start, length)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
+    /// Read the chip back and compare it with `expected`.
+    fn verify(&mut self, expected: Vec<u8>, start: u64) -> PyResult<bool> {
+        match self.inner.verify(start, &expected) {
+            Ok(()) => Ok(true),
+            Err(error) => Err(PyRuntimeError::new_err(error.to_string())),
         }
-        Ok(())
     }
 
-    /// Set flash interface
-    fn set_interface(&mut self, interface: &str) -> PyResult<()> {
-        let handle = self
-            .inner
-            .as_mut()
-            .ok_or_else(|| PyRuntimeError::new_err("Not connected"))?;
-        handle
-            .set_interface(interface)
-            .map_err(|e| PyValueError::new_err(format!("{:?}", e)))
-    }
-
-    /// Disconnect
-    fn disconnect(&mut self) {
-        self.inner = None;
-    }
-
-    /// Get last dump
+    /// The most recent dump, if any.
     fn last_dump(&self) -> Option<Dump> {
         self.last_dump.clone()
     }
+
+    fn __repr__(&self) -> String {
+        match self.inner.device_info() {
+            Some(info) => format!(
+                "<openflash.Device connected to {} ({})>",
+                info.port, info.platform
+            ),
+            None => "<openflash.Device disconnected>".to_string(),
+        }
+    }
 }
 
-// ============================================================================
-// Data Types
-// ============================================================================
-
-/// Device information
 #[pyclass]
 #[derive(Clone)]
 struct PyDeviceInfo {
@@ -285,9 +309,12 @@ struct WriteResult {
     #[pyo3(get)]
     bytes_written: u64,
     #[pyo3(get)]
-    verified: bool,
+    pages_written: u32,
     #[pyo3(get)]
-    duration_ms: u64,
+    sectors_erased: u64,
+    /// Whether the region was read back and compared after writing.
+    #[pyo3(get)]
+    verified: bool,
 }
 
 // ============================================================================
@@ -295,59 +322,140 @@ struct WriteResult {
 // ============================================================================
 
 /// AI analysis submodule
+/// Dump analysis.
+///
+/// These previously ignored their input entirely and returned a fixed result
+/// naming a SquashFS at 0x10000 whatever the dump contained. They now run the
+/// analyser in `openflash_core::ai` over the actual bytes.
 #[pyclass]
 struct AiModule;
 
+/// Page size assumed when a dump carries no chip information.
+///
+/// The analyser needs a page geometry to reason about block structure; 2048 with
+/// 64 pages per block is the most common NAND layout.
+const DEFAULT_PAGE_SIZE: usize = 2048;
+const DEFAULT_PAGES_PER_BLOCK: usize = 64;
+
+fn analyzer_for(dump: &Dump, deep_scan: bool) -> openflash_core::ai::AiAnalyzer {
+    let page_size = dump
+        .chip_info
+        .as_ref()
+        .map(|chip| chip.page_size as usize)
+        .filter(|size| *size > 0)
+        .unwrap_or(DEFAULT_PAGE_SIZE);
+    let pages_per_block = dump
+        .chip_info
+        .as_ref()
+        .map(|chip| (chip.block_size / chip.page_size.max(1)) as usize)
+        .filter(|count| *count > 0)
+        .unwrap_or(DEFAULT_PAGES_PER_BLOCK);
+
+    openflash_core::ai::AiAnalyzer::new(page_size, pages_per_block).with_deep_scan(deep_scan)
+}
+
 #[pymethods]
 impl AiModule {
-    /// Analyze dump data
+    /// Analyse a dump: patterns, filesystems, anomalies, entropy.
     #[staticmethod]
-    #[pyo3(signature = (dump, deep_scan=false, search_keys=true))]
-    fn analyze(dump: &Dump, deep_scan: bool, search_keys: bool) -> PyResult<AnalysisResult> {
-        // Mock analysis
+    #[pyo3(signature = (dump, deep_scan=false))]
+    fn analyze(dump: &Dump, deep_scan: bool) -> PyResult<AnalysisResult> {
+        if dump.data.is_empty() {
+            return Err(PyValueError::new_err("the dump is empty"));
+        }
+
+        let result = analyzer_for(dump, deep_scan).analyze(&dump.data);
+
         Ok(AnalysisResult {
-            quality_score: 0.85,
-            encryption_probability: 0.15,
-            compression_probability: 0.45,
-            patterns: vec![
-                Pattern {
-                    pattern_type: "SquashFS".into(),
-                    offset: 0x10000,
-                    size: 0x500000,
-                    confidence: 0.95,
-                },
-                Pattern {
-                    pattern_type: "U-Boot".into(),
-                    offset: 0,
-                    size: 0x10000,
-                    confidence: 0.90,
-                },
-            ],
-            filesystems: vec![Filesystem {
-                fs_type: "SquashFS".into(),
-                offset: 0x10000,
-                size: Some(0x500000),
-            }],
-            anomalies: vec![],
-            summary: "Firmware dump with bootloader and SquashFS filesystem".into(),
+            quality_score: result.data_quality_score,
+            encryption_probability: result.encryption_probability,
+            compression_probability: result.compression_probability,
+            patterns: result.patterns.iter().map(Pattern::from).collect(),
+            filesystems: result.filesystems.iter().map(Filesystem::from).collect(),
+            anomalies: result.anomalies.iter().map(Anomaly::from).collect(),
+            summary: result.summary,
         })
     }
 
-    /// Quick pattern detection
+    /// Patterns found in the dump.
     #[staticmethod]
     fn detect_patterns(dump: &Dump) -> PyResult<Vec<Pattern>> {
-        Ok(vec![Pattern {
-            pattern_type: "SquashFS".into(),
-            offset: 0x10000,
-            size: 0x500000,
-            confidence: 0.95,
-        }])
+        if dump.data.is_empty() {
+            return Err(PyValueError::new_err("the dump is empty"));
+        }
+        Ok(analyzer_for(dump, false)
+            .analyze(&dump.data)
+            .patterns
+            .iter()
+            .map(Pattern::from)
+            .collect())
     }
 
-    /// Search for encryption keys
+    /// Regions that look like cryptographic key material.
     #[staticmethod]
     fn search_keys(dump: &Dump) -> PyResult<Vec<KeyCandidate>> {
-        Ok(vec![])
+        if dump.data.is_empty() {
+            return Err(PyValueError::new_err("the dump is empty"));
+        }
+        Ok(analyzer_for(dump, true)
+            .search_encryption_keys(&dump.data)
+            .iter()
+            .map(KeyCandidate::from)
+            .collect())
+    }
+
+    /// A Markdown report for a dump.
+    #[staticmethod]
+    #[pyo3(signature = (dump, deep_scan=false))]
+    fn generate_report(dump: &Dump, deep_scan: bool) -> PyResult<String> {
+        if dump.data.is_empty() {
+            return Err(PyValueError::new_err("the dump is empty"));
+        }
+        let analyzer = analyzer_for(dump, deep_scan);
+        let result = analyzer.analyze(&dump.data);
+        Ok(analyzer.generate_report(&result))
+    }
+}
+
+impl From<&openflash_core::ai::DetectedPattern> for Pattern {
+    fn from(pattern: &openflash_core::ai::DetectedPattern) -> Self {
+        Self {
+            pattern_type: format!("{:?}", pattern.pattern_type),
+            offset: pattern.start_offset as u64,
+            size: pattern.end_offset.saturating_sub(pattern.start_offset) as u64,
+            confidence: pattern.confidence.to_score(),
+        }
+    }
+}
+
+impl From<&openflash_core::ai::FilesystemInfo> for Filesystem {
+    fn from(filesystem: &openflash_core::ai::FilesystemInfo) -> Self {
+        Self {
+            fs_type: format!("{:?}", filesystem.fs_type),
+            offset: filesystem.offset as u64,
+            size: filesystem.size.map(|size| size as u64),
+        }
+    }
+}
+
+impl From<&openflash_core::ai::Anomaly> for Anomaly {
+    fn from(anomaly: &openflash_core::ai::Anomaly) -> Self {
+        Self {
+            anomaly_type: format!("{:?}", anomaly.severity),
+            severity: format!("{:?}", anomaly.severity),
+            offset: anomaly.location.unwrap_or(0) as u64,
+            description: anomaly.description.clone(),
+        }
+    }
+}
+
+impl From<&openflash_core::ai::KeyCandidate> for KeyCandidate {
+    fn from(candidate: &openflash_core::ai::KeyCandidate) -> Self {
+        Self {
+            key_type: candidate.key_type.clone(),
+            offset: candidate.offset as u64,
+            confidence: candidate.confidence.to_score(),
+        }
     }
 }
 
@@ -547,18 +655,16 @@ impl Batch {
         self.stop_on_error = stop;
     }
 
-    /// Run all jobs
-    fn run(&self, device: &Device) -> PyResult<Vec<BatchResultPy>> {
-        let mut results = vec![];
-        for job in &self.jobs {
-            results.push(BatchResultPy {
-                job_id: job.id,
-                success: true,
-                duration_ms: 100,
-                message: format!("Completed: {}", job.name),
-            });
-        }
-        Ok(results)
+    /// Run all jobs.
+    ///
+    /// Not implemented: no runner executes these job descriptions. The previous
+    /// implementation reported every job as having completed successfully in
+    /// 100 ms without doing anything, so a script could not tell.
+    fn run(&self, _device: &Device) -> PyResult<Vec<BatchResultPy>> {
+        Err(PyRuntimeError::new_err(
+            "batch execution is not implemented: the job types exist but no runner \
+             executes them. Drive the Device methods from Python instead.",
+        ))
     }
 
     /// Get job count
@@ -601,38 +707,80 @@ struct BatchResultPy {
 // Module Functions
 // ============================================================================
 
-/// Scan for connected devices
+/// List attached USB devices.
+///
+/// An empty list means nothing is plugged in. This used to return one invented
+/// RP2040 at /dev/ttyACM0 whatever was connected.
 #[pyfunction]
-fn scan() -> PyResult<Vec<PyDeviceInfo>> {
-    Ok(vec![PyDeviceInfo {
-        port: "/dev/ttyACM0".into(),
-        firmware_version: "1.8.0".into(),
-        platform: "RP2040".into(),
-        serial_number: "OF-001".into(),
-        interfaces: vec!["parallel_nand".into(), "spi_nand".into()],
-    }])
+fn scan() -> PyResult<Vec<String>> {
+    #[cfg(feature = "usb")]
+    {
+        openflash_core::transport::list_devices()
+            .map(|devices| devices.into_iter().map(|d| d.selector()).collect())
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+    #[cfg(not(feature = "usb"))]
+    {
+        Err(PyRuntimeError::new_err(
+            "this build was compiled without USB support",
+        ))
+    }
 }
 
-/// Connect to device (auto-detect or specific port)
+/// Connect to a USB device.
+///
+/// With no argument, the single attached device is used, and it is an error if
+/// none or several are attached.
 #[pyfunction]
-#[pyo3(signature = (port=None))]
-fn connect(port: Option<&str>) -> PyResult<Device> {
-    let info = DeviceInfo {
-        port: port.unwrap_or("/dev/ttyACM0").to_string(),
-        firmware_version: "1.8.0".to_string(),
-        platform: "RP2040".to_string(),
-        serial_number: "OF-2026-001234".to_string(),
-        interfaces: vec![
-            "parallel_nand".into(),
-            "spi_nand".into(),
-            "spi_nor".into(),
-            "emmc".into(),
-        ],
+#[pyo3(signature = (device=None))]
+fn connect(device: Option<&str>) -> PyResult<Device> {
+    let target = match device {
+        Some(selector) => ConnectionTarget::Usb(selector.to_string()),
+        None => ConnectionTarget::AutoUsb,
     };
-    Ok(Device {
-        inner: Some(DeviceHandle::new(info)),
-        last_dump: None,
+    Device::open(ConnectionConfig {
+        target,
+        ..ConnectionConfig::default()
     })
+}
+
+/// Connect to an SBC agent over TCP, as `host:port`.
+#[pyfunction]
+fn connect_tcp(endpoint: &str) -> PyResult<Device> {
+    Device::open(ConnectionConfig {
+        target: ConnectionTarget::Tcp(endpoint.to_string()),
+        ..ConnectionConfig::default()
+    })
+}
+
+/// Connect to an SBC agent over a Unix socket.
+#[pyfunction]
+fn connect_unix(path: &str) -> PyResult<Device> {
+    Device::open(ConnectionConfig {
+        target: ConnectionTarget::Unix(path.to_string()),
+        ..ConnectionConfig::default()
+    })
+}
+
+/// Connect to the in-process emulator, backed by a chip of `size` bytes.
+///
+/// No hardware is involved and nothing real is read or written. `size` must be a
+/// power of two of at least 4096 bytes.
+#[pyfunction]
+#[pyo3(signature = (size=2 * 1024 * 1024))]
+fn connect_emulated(size: usize) -> PyResult<Device> {
+    if size < 4096 || !size.is_power_of_two() {
+        return Err(PyValueError::new_err(
+            "an emulated chip size must be a power of two of at least 4096 bytes",
+        ));
+    }
+    Device::open(ConnectionConfig::emulated(size))
+}
+
+/// The protocol revision these bindings speak.
+#[pyfunction]
+fn protocol_version() -> u8 {
+    openflash_core::protocol::PROTOCOL_VERSION
 }
 
 /// Load dump from file
@@ -685,7 +833,7 @@ struct CompareResult {
 /// Get library version
 #[pyfunction]
 fn version() -> &'static str {
-    "1.8.0"
+    env!("CARGO_PKG_VERSION")
 }
 
 /// List supported chips
@@ -741,6 +889,10 @@ fn list_chips(interface: Option<&str>) -> PyResult<Vec<ChipInfo>> {
 fn openflash(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(scan, m)?)?;
     m.add_function(wrap_pyfunction!(connect, m)?)?;
+    m.add_function(wrap_pyfunction!(connect_tcp, m)?)?;
+    m.add_function(wrap_pyfunction!(connect_unix, m)?)?;
+    m.add_function(wrap_pyfunction!(connect_emulated, m)?)?;
+    m.add_function(wrap_pyfunction!(protocol_version, m)?)?;
     m.add_function(wrap_pyfunction!(load_dump, m)?)?;
     m.add_function(wrap_pyfunction!(compare_dumps, m)?)?;
     m.add_function(wrap_pyfunction!(version, m)?)?;
@@ -758,14 +910,44 @@ fn openflash(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let ai = PyModule::new(m.py(), "ai")?;
     ai.add_class::<AiModule>()?;
     ai.add_function(wrap_pyfunction!(ai_analyze, &ai)?)?;
+    ai.add_function(wrap_pyfunction!(ai_detect_patterns, &ai)?)?;
+    ai.add_function(wrap_pyfunction!(ai_search_keys, &ai)?)?;
+    ai.add_function(wrap_pyfunction!(ai_generate_report, &ai)?)?;
     m.add_submodule(&ai)?;
+    // Registered in sys.modules as well, so `import openflash.ai` works and not
+    // only attribute access on the parent module.
+    m.py()
+        .import("sys")?
+        .getattr("modules")?
+        .set_item("openflash.ai", &ai)?;
 
     Ok(())
 }
 
-/// AI analyze function for submodule
+/// `openflash.ai.analyze(dump)`
 #[pyfunction]
-#[pyo3(signature = (dump, deep_scan=false))]
+#[pyo3(name = "analyze", signature = (dump, deep_scan=false))]
 fn ai_analyze(dump: &Dump, deep_scan: bool) -> PyResult<AnalysisResult> {
-    AiModule::analyze(dump, deep_scan, true)
+    AiModule::analyze(dump, deep_scan)
+}
+
+/// `openflash.ai.detect_patterns(dump)`
+#[pyfunction]
+#[pyo3(name = "detect_patterns")]
+fn ai_detect_patterns(dump: &Dump) -> PyResult<Vec<Pattern>> {
+    AiModule::detect_patterns(dump)
+}
+
+/// `openflash.ai.search_keys(dump)`
+#[pyfunction]
+#[pyo3(name = "search_keys")]
+fn ai_search_keys(dump: &Dump) -> PyResult<Vec<KeyCandidate>> {
+    AiModule::search_keys(dump)
+}
+
+/// `openflash.ai.generate_report(dump)`
+#[pyfunction]
+#[pyo3(name = "generate_report", signature = (dump, deep_scan=false))]
+fn ai_generate_report(dump: &Dump, deep_scan: bool) -> PyResult<String> {
+    AiModule::generate_report(dump, deep_scan)
 }

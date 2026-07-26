@@ -57,3 +57,7 @@ tmp/
 temp/
 *.tmp
 .kiro
+# Python build output
+pyopenflash/dist/
+pyopenflash/target/
+*.whl

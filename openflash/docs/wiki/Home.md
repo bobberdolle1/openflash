@@ -45,3 +45,10 @@ All complex logic runs on your computer, not the microcontroller. This means:
 ## Contributing
 
 We welcome contributions! See [CONTRIBUTING.md](https://github.com/bobberdolle1/openflash/blob/main/CONTRIBUTING.md)
+
+## Current status
+
+This wiki describes the project's intent. For what actually works today —
+per board, per flash interface, with what is missing spelled out — see
+[PLATFORMS.md](../PLATFORMS.md). The wire protocol is documented in
+[PROTOCOL.md](../PROTOCOL.md).

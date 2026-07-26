@@ -44,11 +44,12 @@ cargo tauri build
 
 ## First Run (Without Hardware)
 
-OpenFlash includes a mock device for testing:
+OpenFlash includes an emulated chip for trying things without hardware:
 
 1. Launch OpenFlash
-2. Click **"Mock"** button
-3. Click **"Scan"** - you'll see "OpenFlash Mock Device"
+2. Click **"Scan"** — the list always contains
+   "Emulated SPI NOR chip (no hardware)"
+3. Connect to it
 4. Click **"Connect"**
 5. Click **"Dump NAND"**
 6. Explore the tabs: Hex View, Bitmap, Analysis

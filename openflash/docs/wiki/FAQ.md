@@ -54,7 +54,10 @@ Usually yes, unless:
 ## Software
 
 ### How do I test without hardware?
-Click the "Mock" button to enable a simulated device. This lets you test all features.
+Connect to the "Emulated SPI NOR chip" entry in the device list, or run the CLI
+with `--emulate 2097152`. The emulator implements the device side of the real
+protocol against a byte array, with real flash semantics, so it exercises the
+same code path as hardware. Every emulated run is labelled as such.
 
 ### What file formats can I save?
 Currently raw binary (.bin). More formats planned.

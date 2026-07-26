@@ -16,7 +16,7 @@ Common issues and solutions.
    - macOS: `ls /dev/tty.usb*`
    - Linux: `ls /dev/ttyACM*`
 4. Reflash firmware to microcontroller
-5. Try Mock mode to verify app works
+5. Connect to the emulated chip to check the application itself works
 
 ### "Connection failed" after connecting
 

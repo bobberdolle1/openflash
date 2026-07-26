@@ -224,7 +224,11 @@ enum Commands {
 
     /// List supported flash chips
     Chips {
-        /// Filter by interface (nand, spi-nand, spi-nor, emmc, ufs)
+        /// Look a part up by its raw id, as hex (e.g. EF4018, or "EC F1 00 95 40")
+        #[arg(long)]
+        id: Option<String>,
+
+        /// Which database to search (nand, spi-nand, spi-nor, emmc); all by default
         #[arg(short, long)]
         interface: Option<String>,
 
@@ -585,11 +589,13 @@ fn main() {
              (pyopenflash) to drive the device from a script.",
         ),
         Commands::Chips {
+            id,
             interface,
             manufacturer,
             search,
         } => commands::list_chips(
             &cli,
+            id.clone(),
             interface.clone(),
             manufacturer.clone(),
             search.clone(),

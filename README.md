@@ -116,8 +116,8 @@ attached.
 | `verify --file FILE` | read the chip back and compare |
 | `analyze FILE` | filesystems, entropy, patterns, anomalies |
 | `compare A B` | byte-level diff with a report |
-| `unpack`, `rootfs`, `vulnscan` | offline firmware analysis |
-| `chips` | browse the chip database |
+| `unpack`, `rootfs`, `vulnscan` | offline firmware analysis; `rootfs` locates and carves filesystem images but does not list their contents |
+| `chips --id EF4018` | look a part up in the chip database by its id |
 
 `read` and `verify` open the device read-only, so a dump cannot modify the chip
 it is reading. `write` and `erase` ask before touching real hardware unless you

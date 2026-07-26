@@ -194,7 +194,7 @@ impl Device {
     }
 }
 
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 struct PyDeviceInfo {
     #[pyo3(get)]
@@ -222,7 +222,7 @@ impl From<&DeviceInfo> for PyDeviceInfo {
 }
 
 /// Chip information
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 struct ChipInfo {
     #[pyo3(get)]
@@ -254,7 +254,7 @@ impl ChipInfo {
 }
 
 /// Dump data
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 struct Dump {
     #[pyo3(get)]
@@ -303,7 +303,7 @@ impl Dump {
 }
 
 /// Write result
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 struct WriteResult {
     #[pyo3(get)]
@@ -460,7 +460,7 @@ impl From<&openflash_core::ai::KeyCandidate> for KeyCandidate {
 }
 
 /// Analysis result
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 struct AnalysisResult {
     #[pyo3(get)]
@@ -515,7 +515,7 @@ impl AnalysisResult {
 }
 
 /// Detected pattern
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 struct Pattern {
     #[pyo3(get)]
@@ -536,7 +536,7 @@ impl Pattern {
 }
 
 /// Detected filesystem
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 struct Filesystem {
     #[pyo3(get)]
@@ -548,7 +548,7 @@ struct Filesystem {
 }
 
 /// Detected anomaly
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 struct Anomaly {
     #[pyo3(get)]
@@ -562,7 +562,7 @@ struct Anomaly {
 }
 
 /// Key candidate
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 struct KeyCandidate {
     #[pyo3(get)]
@@ -673,7 +673,7 @@ impl Batch {
     }
 }
 
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 struct BatchJobPy {
     #[pyo3(get)]
@@ -690,7 +690,7 @@ struct BatchJobPy {
     depends_on: Vec<usize>,
 }
 
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 struct BatchResultPy {
     #[pyo3(get)]
@@ -817,7 +817,7 @@ fn compare_dumps(dump1: &Dump, dump2: &Dump) -> PyResult<CompareResult> {
     })
 }
 
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 struct CompareResult {
     #[pyo3(get)]

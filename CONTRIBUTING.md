@@ -42,9 +42,10 @@ Feature requests are welcome! Please:
 
 ### Prerequisites
 
-- Rust 1.70+ (`rustup update stable`)
-- Node.js 18+ 
-- Tauri CLI (`cargo install tauri-cli`)
+- Rust 1.85+ for the library, the CLI and the board agents; 1.88+ for the
+  desktop app, which pulls in a newer dependency tree (`rustup update stable`)
+- Node.js 18+, only for the desktop app
+- Tauri CLI (`cargo install tauri-cli`), only for the desktop app
 
 ### Building
 

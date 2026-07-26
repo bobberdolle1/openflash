@@ -1,5 +1,15 @@
 # Troubleshooting
 
+> Sections below that cover the Raspberry Pi Pico, STM32 or ESP32 refer to
+> firmware that does not currently build, so their symptoms cannot be reproduced
+> today. The working setup is a Raspberry Pi, Orange Pi or Banana Pi running the
+> agent against a SPI NOR chip; see [PLATFORMS.md](../PLATFORMS.md).
+>
+> **Start here for the working setup:** if the agent reports no interfaces, the
+> SPI bus did not open — enable spidev (`dtparam=spi=on` on a Pi, then reboot)
+> and check that `/dev/spidev0.0` exists. An agent that starts but advertises
+> nothing is telling you "no bus", which is a different problem from "no chip".
+
 Common issues and solutions.
 
 ## Connection Issues

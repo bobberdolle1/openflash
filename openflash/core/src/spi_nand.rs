@@ -131,7 +131,11 @@ pub fn get_spi_nand_chip_info(chip_id: &[u8]) -> Option<SpiNandChipInfo> {
     get_spi_nand_chip_info_generic(mfr, &device)
 }
 
-fn get_spi_nand_chip_info_exact(mfr: u8, device: &[u8]) -> Option<SpiNandChipInfo> {
+/// An exact catalogue entry, or `None`. See [`get_spi_nor_chip_info_exact`]
+/// in `spi_nor` for why this is separate from the generic fallback.
+///
+/// [`get_spi_nor_chip_info_exact`]: crate::spi_nor::get_spi_nor_chip_info_exact
+pub fn get_spi_nand_chip_info_exact(mfr: u8, device: &[u8]) -> Option<SpiNandChipInfo> {
     match (mfr, device) {
         // ============ GigaDevice ============
         // GD5F1GQ4UBxIG - 128MB SLC

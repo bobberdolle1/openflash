@@ -138,7 +138,13 @@ pub fn get_spi_nor_chip_info(jedec_id: &[u8; 3]) -> Option<SpiNorChipInfo> {
     get_spi_nor_chip_info_generic(mfr, jedec_id)
 }
 
-fn get_spi_nor_chip_info_exact(jedec_id: &[u8; 3]) -> Option<SpiNorChipInfo> {
+/// An exact catalogue entry for `jedec_id`, or `None`.
+///
+/// Distinct from [`get_spi_nor_chip_info`], which falls back to geometry derived
+/// from the capacity byte. "In the catalogue" and "guessed from the id" are
+/// different claims, and a caller searching several databases at once needs to
+/// be able to ask for the first.
+pub fn get_spi_nor_chip_info_exact(jedec_id: &[u8; 3]) -> Option<SpiNorChipInfo> {
     match jedec_id {
         // ============ Winbond W25Q Series ============
         [0xEF, 0x40, 0x14] => Some(SpiNorChipInfo {

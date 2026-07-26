@@ -3,7 +3,15 @@
 ## General
 
 ### What is OpenFlash?
-OpenFlash is an open-source tool for reading, writing, and analyzing NAND flash memory chips. It's designed for reverse engineers, hardware hackers, and data recovery specialists.
+OpenFlash is an open-source tool for reading, writing, and analyzing flash memory chips. It's designed for reverse engineers, hardware hackers, and data recovery specialists.
+
+### What works right now?
+Reading, erasing, programming and verifying **SPI NOR** flash, using a Raspberry
+Pi, Orange Pi or Banana Pi as the programmer. Plus offline analysis of dumps you
+already have, for all five interfaces.
+
+Nothing else can take a dump yet. [PLATFORMS.md](../PLATFORMS.md) has the detail,
+and it is worth reading before buying a board.
 
 ### Is it free?
 Yes! OpenFlash is 100% free and open-source under the MIT license.
@@ -14,34 +22,53 @@ Yes! OpenFlash is 100% free and open-source under the MIT license.
 - Linux (Ubuntu 20.04+, Debian 11+, Arch, etc.)
 
 ### Do I need special hardware?
-You need a cheap microcontroller (~$4-5):
-- Raspberry Pi Pico (recommended)
-- STM32F103 "Blue Pill"
+For real chips, yes: a Raspberry Pi, Orange Pi or Banana Pi, plus wires to your
+SPI NOR chip. Any of the three works — they run the same agent.
 
-Plus wires to connect to your NAND chip.
+To try the software without any hardware, use the built-in emulator. See
+[Getting Started](Getting-Started.md).
 
 ## Hardware
 
-### Which microcontroller should I use?
-**Raspberry Pi Pico (RP2040)** is recommended:
-- Faster
-- Better USB support
-- Easier to flash
-- More available
+### Which board should I use?
+Whichever of the three you already have. The Raspberry Pi, Orange Pi and Banana
+Pi agents share one implementation, so they behave identically; they differ only
+in how the board's SPI controller is reached.
 
-**STM32F103** works but is slower and harder to flash.
+### Can I use a Raspberry Pi Pico, a Blue Pill or an ESP32?
+Not yet. The project's own README and earlier versions of this page recommended a
+$4 Pico, but none of the microcontroller firmware currently builds — they pin
+dependency versions that no longer resolve and have no target configuration or
+linker script. [PLATFORMS.md](../PLATFORMS.md) lists what each one needs.
+
+This is the gap the project most wants closed; see the contributing list in the
+README.
 
 ### Can I use Arduino?
-Not currently. Arduino's USB stack isn't suitable for our protocol. We may add support in the future.
+No. The Arduino GIGA directory is a stub with no command table and nothing that
+talks to a chip.
 
-### What NAND chips are supported?
-Any ONFI-compliant parallel NAND flash with 8-bit data bus. See [Supported Chips](Supported-Chips.md).
+### What chips are supported?
+The database holds 207 parts across SPI NOR, parallel NAND, SPI NAND and eMMC,
+but only SPI NOR can actually be read today. See
+[Supported Chips](Supported-Chips.md), which explains the difference between "in
+the database" and "readable".
+
+### Can I read parallel NAND?
+Not yet. The chip database, the ONFI parameter-page parser and the ECC codecs are
+all there, and they work on a dump you already have — but no firmware in this
+repository can drive a parallel NAND bus. The single-board-computer agents have
+scaffolding for it whose operations deliberately refuse, because the address
+cycles are missing and driving a NAND without an address would read, or program,
+an arbitrary page.
 
 ### Can I read eMMC/SD cards?
-No, OpenFlash is for raw NAND flash only. eMMC and SD cards have built-in controllers.
+Not yet. eMMC parts are in the database and their CSD/EXT_CSD registers can be
+parsed from a dump, but there is no firmware that can talk to one. SD cards are
+not a target.
 
 ### Can I read SPI NAND?
-Not yet, but it's on the roadmap.
+Not yet — same position as parallel NAND: database and parsers, no firmware.
 
 ### Do I need to desolder the chip?
 Usually yes, unless:
@@ -66,11 +93,25 @@ Currently raw binary (.bin). More formats planned.
 Yes, but use with caution! Writing incorrect data can brick devices.
 
 ### Does it support bad block management?
-OpenFlash detects bad blocks and shows them in analysis. It doesn't automatically skip them during dumps (you get raw data).
+No, and the analysis output is careful about saying so. Manufacturers mark bad
+blocks in the spare area, which the dump statistics do not read; what they report
+is a count of blocks whose first page is entirely zero, which is the pattern a
+worn or failed block usually leaves. That is a heuristic and it is named for what
+it measures — `all_zero_blocks` — rather than presented as a bad block table.
+
+Dumps are raw: nothing is skipped or remapped.
 
 ### What ECC algorithms are supported?
-- Hamming (1-bit correction)
-- BCH (multi-bit correction)
+- **Hamming** — corrects one bit per sector, detects two. Checked at every bit
+  position of a sector.
+- **BCH** — corrects up to `t` bits over a 512- or 1024-byte sector, in the 4-,
+  8-, 16- and 24-bit configurations NAND uses.
+
+BCH previously refused to run because it mis-corrected data; that is fixed. One
+limit is worth knowing: the codec is self-consistent, but a hardware NAND
+controller picks its own bit order and spare-area layout, and sometimes scrambles
+the data, so ECC bytes from a dump made by such a controller will not generally
+verify here.
 
 ## Analysis
 
@@ -84,12 +125,16 @@ OpenFlash detects bad blocks and shows them in analysis. It doesn't automaticall
 
 ### What does the bitmap view show?
 Each pixel represents one page:
-- White: Empty (0xFF)
-- Blue: Low entropy (repetitive data)
-- Green: Medium entropy
-- Orange: High entropy
-- Purple: Very high entropy (compressed/encrypted)
-- Red: Potential bad block
+- White: empty (all `0xFF`)
+- Blue: low entropy (repetitive data)
+- Green: medium entropy
+- Orange: high entropy
+- Purple: very high entropy (compressed or encrypted)
+- Red: all zeros
+
+Red means the page read back as all zeros, which is the pattern a worn or failed
+block usually leaves — not a bad block marker read from the spare area. The
+legend in the app says "Bad/Zero" for the same reason.
 
 ### Can it decrypt encrypted data?
 No, OpenFlash only reads raw data. Decryption is up to you.

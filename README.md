@@ -35,9 +35,10 @@ detection, ECC, entropy and pattern analysis, firmware unpacking.
 This section is deliberately first, because a table of supported boards is easy
 to write and hard to earn.
 
-**Works end to end today:** SPI NOR flash, over a Raspberry Pi running the
-OpenFlash agent. Identify, dump, erase, program, verify — all covered by tests
-that run in CI.
+**Works end to end today:** SPI NOR flash, over a Raspberry Pi, Orange Pi or
+Banana Pi running the OpenFlash agent. Identify, dump, erase, program, verify —
+all covered by tests that run in CI. The three agents share one implementation,
+so they cannot drift apart.
 
 **Works without hardware:** the built-in emulator implements the device side of
 the protocol with real flash semantics, so you can try every command and see
@@ -82,16 +83,21 @@ up here rather than on your chip.
 
 ## With hardware
 
-Today that means a Raspberry Pi with the agent running on it:
+Today that means a Raspberry Pi, Orange Pi or Banana Pi with the agent running:
 
 ```bash
-# On the Pi
+# On the board (pick the crate for yours)
 cargo run --release -p openflash-firmware-raspberry-pi
+cargo run --release -p openflash-firmware-orange-pi
+cargo run --release -p openflash-firmware-banana-pi
 
 # On your machine
 openflash --unix /tmp/openflash.sock detect
 openflash --unix /tmp/openflash.sock read -o dump.bin
 ```
+
+Set `OPENFLASH_TCP=0.0.0.0:9999` on the board to serve over the network instead,
+then use `openflash --tcp board.local:9999`.
 
 Wiring is in `docs/HARDWARE_GUIDE.md`. USB devices are found automatically once
 firmware exists that speaks the current protocol; `openflash scan` lists what is
@@ -156,7 +162,7 @@ openflash/
 ├── cli/        the openflash command
 ├── gui/        Tauri + React desktop app
 ├── pyopenflash/ Python bindings
-├── firmware/   per-board device code
+├── firmware/   per-board device code; sbc-agent is shared by the three SBCs
 └── docs/       PROTOCOL.md, PLATFORMS.md, HARDWARE_GUIDE.md
 ```
 
@@ -174,8 +180,11 @@ The most valuable contributions right now, in order:
    W25Q part would let CI prove a real read, which is the only thing that
    really protects against regressions here.
 3. **Chip database entries.** Add a part, add a test.
-4. **Parallel NAND on the Pi agent.** The scaffold is there; it needs the
-   address cycles.
+4. **Parallel NAND on an SBC agent.** The scaffold is there; it needs the
+   address cycles. Note that Linux GPIO timing makes this hard — the
+   microcontrollers are the better home for it.
+5. **BCH ECC.** Currently refuses to run because it mis-corrected data. Needs a
+   correct implementation checked against published test vectors.
 
 `CONTRIBUTING.md` has the process. Please do not add a platform or a feature to
 the documentation before the code behind it works — the project has been through
@@ -197,8 +206,10 @@ MIT. See [LICENSE](LICENSE).
 
 ### Честный статус
 
-**Работает полностью:** SPI NOR через Raspberry Pi с агентом OpenFlash —
-определение чипа, дамп, стирание, запись, проверка. Всё покрыто тестами в CI.
+**Работает полностью:** SPI NOR через Raspberry Pi, Orange Pi или Banana Pi с
+агентом OpenFlash — определение чипа, дамп, стирание, запись, проверка. Всё
+покрыто тестами в CI. У трёх агентов одна общая реализация, поэтому разъехаться
+они не могут.
 
 **Работает без железа:** встроенный эмулятор реализует устройство со настоящей
 семантикой флеш-памяти, так что все команды можно попробовать и увидеть, что
@@ -261,7 +272,9 @@ of verify --file firmware.bin
    его таблица опкодов уже совпадает, кроме `GetVersion`.
 2. **Тесты на реальном железе в CI** (self-hosted runner с Pico и W25Q).
 3. **Новые чипы в базу** — запись плюс тест.
-4. **Parallel NAND в агенте Raspberry Pi** — каркас есть, нужны адресные циклы.
+4. **Parallel NAND в агенте для SBC** — каркас есть, нужны адресные циклы.
+5. **BCH ECC** — сейчас отказывается работать, потому что портил данные. Нужна
+   корректная реализация, проверенная по опубликованным тестовым векторам.
 
 Пожалуйста, не добавляйте платформу или функцию в документацию раньше, чем
 заработает код: проект уже проходил через это, и разбор последствий занял

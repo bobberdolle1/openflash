@@ -16,7 +16,9 @@ update the row.
 
 | Platform | Builds in CI | Speaks the shared protocol | Working interfaces | Tests |
 |---|---|---|---|---|
-| Raspberry Pi (SBC) | yes | yes | SPI NOR | 21 |
+| Raspberry Pi (SBC) | yes | yes | SPI NOR | 5 + 33 shared |
+| Orange Pi (SBC) | yes | yes | SPI NOR | 6 + 33 shared |
+| Banana Pi (SBC) | yes | yes | SPI NOR | 6 + 33 shared |
 | RP2040 (Pico) | no | no — legacy NAND opcodes, unframed v1 | none verified | none |
 | STM32F103 (Blue Pill) | no | no — legacy NAND opcodes, unframed v1 | none verified | none |
 | STM32F4 (Black Pill) | no | no — legacy NAND opcodes, unframed v1 | none verified | none |
@@ -24,35 +26,64 @@ update the row.
 | Teensy 4.0 / 4.1 | no | almost — `GetVersion` differs | none verified | none |
 | RP2350 (Pico 2) | no | no table at all | none — stubs | none |
 | Arduino GIGA R1 | no | no table at all | none — stubs | none |
-| Orange Pi (SBC) | no | no — its own opcode base | none verified | none |
-| Banana Pi (SBC) | no | almost — `GetVersion` differs | none verified | none |
 
-Only the Raspberry Pi agent is known to work end to end against the host tools.
-It is the reference: read it before writing another.
+The three single-board-computer agents work end to end against the host tools and
+share one implementation, `firmware/sbc-agent`: the protocol handling, the SPI NOR
+sequencing and their tests exist once. A board contributes two methods — a
+full-duplex SPI transfer and a write — and nothing else. Read one of them before
+writing another.
+
+No microcontroller firmware currently builds.
 
 ## Detail
 
-### Raspberry Pi (SBC) — working
+### The three SBC agents — working
 
-A Linux daemon that drives the chip through the Pi's own SPI controller and
-serves hosts over a Unix socket or TCP.
+Linux daemons that drive the chip through the board's own SPI controller and
+serve hosts over a Unix socket or TCP. All three are built, linted and tested by
+CI on every push.
+
+| Board | Crate | SPI access |
+|---|---|---|
+| Raspberry Pi 3B+/4/5/Zero 2W | `firmware/raspberry_pi` | rppal |
+| Orange Pi Zero 3 / Zero 2W / 5 | `firmware/orange_pi` | Linux spidev |
+| Banana Pi M2 Zero / M4 Berry / BPI-F3 | `firmware/banana_pi` | Linux spidev |
+
+Shared, in `firmware/sbc-agent`:
 
 - SPI NOR: read, page program, sector/32K/64K/chip erase, status,
-  write-enable/disable. Wired to `/dev/spidev0.0`.
-- Uses `openflash-protocol`, framed revision 2, so it cannot drift from the host.
-- Advertises SPI NOR only, and advertises nothing when the SPI device could not
-  be opened, so a host can distinguish "no bus" from "no chip".
-- Parallel NAND (`gpio_nand.rs`) is a scaffold whose operations return
-  `NotImplemented`: the command sequences are there but the address cycles are
-  not, and driving a NAND without an address would read or program an arbitrary
-  page. Not advertised.
-- Built, linted and tested by CI on every push.
+  write-enable/disable
+- framed protocol revision 2, so no agent can drift from what the host speaks
+- request validation before anything reaches the bus: a program that would cross
+  a 256-byte page boundary is refused rather than wrapped by the chip and
+  corrupting data, and an unaligned erase is refused rather than erasing the
+  wrong unit
+- one `SpiBus` call is one SPI transaction. This matters: the Orange Pi and
+  Banana Pi agents used to issue a `write` syscall followed by a separate `read`
+  on `/dev/spidev*`, which lets the kernel deassert chip select in between, so
+  the chip discarded the command before the data arrived. Both now use
+  `SPI_IOC_MESSAGE`.
+- an agent that cannot open its bus still starts and reports no interfaces, so a
+  host can tell "no bus" from "no chip"
+- SPI NOR only is advertised, because that is all that is wired up
 
-Run it on the Pi, then from the host:
+The sequencing is tested against a chip that answers on the bus, so a wrong
+opcode, a reversed address or a missing write-enable shows up as wrong data in a
+test rather than as a damaged chip.
+
+Parallel NAND over Linux GPIO (`gpio_nand.rs`, `gpio.rs`) is scaffolding whose
+operations refuse: the command sequences are there but the address cycles are
+not, and driving a NAND without an address would read, or program, an arbitrary
+page. Not advertised.
+
+Run one on the board, then from the host:
 
 ```bash
 openflash --unix /tmp/openflash.sock detect
 openflash --unix /tmp/openflash.sock read -o dump.bin
+
+# Or over the network, with OPENFLASH_TCP=0.0.0.0:9999 set on the board
+openflash --tcp board.local:9999 detect
 ```
 
 ### RP2040, STM32F103, STM32F4 — substantial, unverified
@@ -103,24 +134,23 @@ There is no command table at all. Nothing here talks to a chip.
 378 lines, three of five files under 80, `usb_handler.rs` is 31. No command
 table. Nothing here talks to a chip.
 
-### Orange Pi, Banana Pi — early
-
-Linux agents like the Raspberry Pi one but much smaller (337 and 746 lines).
-Both declare their own opcode tables and reply unframed. The Raspberry Pi agent
-is the model to follow; the SPI paths are close enough that porting is mostly
-mechanical.
-
 ## Interfaces
 
 Where each flash interface stands across the project, host side and device side.
 
 | Interface | Host support | Device support |
 |---|---|---|
-| SPI NOR | identify, read, erase, program, verify | Raspberry Pi agent |
-| Parallel NAND | chip database, ONFI parsing, ECC | none working |
+| SPI NOR | identify, read, erase, program, verify | all three SBC agents |
+| Parallel NAND | chip database, ONFI parsing, Hamming ECC | none working |
 | SPI NAND | chip database | none working |
 | eMMC | chip database, CSD/EXT_CSD parsing | none working |
 | UFS | descriptor parsing, SCSI CDB building | none working |
+
+ECC: the Hamming codec corrects single-bit errors and detects double-bit ones,
+checked at every bit position of a sector. BCH refuses to run — it repaired none
+of 4096 injected single-bit errors and mis-corrected ten of them, which is worse
+than no ECC — so it returns `NotImplemented` until it is fixed and checked
+against published vectors. See `core/src/ecc.rs`.
 
 The host's chip databases and dump analysis cover far more than the device layer
 can reach. That asymmetry is real: parsing an existing dump works for all five

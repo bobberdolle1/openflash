@@ -8,9 +8,9 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-# The opcode table and framing come from the shared crate, so this agent cannot
-# drift away from what the host speaks.
-openflash-protocol = { workspace = true }
+# Protocol handling and SPI NOR sequencing are shared with the other SBC agents,
+# so this crate cannot drift away from what the host speaks.
+openflash-sbc-agent = { workspace = true }
 rppal = "0.18"
 thiserror = "1.0"
 log = "0.4"

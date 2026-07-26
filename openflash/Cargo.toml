@@ -7,7 +7,10 @@ members = [
     "gui/src-tauri",
     # The single-board-computer agents are ordinary Linux binaries, so they build
     # and lint alongside the host tools.
+    "firmware/sbc-agent",
     "firmware/raspberry_pi",
+    "firmware/orange_pi",
+    "firmware/banana_pi",
 ]
 
 # The microcontroller firmware targets bare metal: each crate pins its own
@@ -23,8 +26,6 @@ exclude = [
     "firmware/esp32",
     "firmware/teensy4",
     "firmware/arduino_giga",
-    "firmware/orange_pi",
-    "firmware/banana_pi",
 ]
 resolver = "2"
 
@@ -39,6 +40,7 @@ rust-version = "1.77"
 # Internal crates
 openflash-protocol = { path = "protocol", version = "3.1.0" }
 openflash-core = { path = "core", version = "3.1.0" }
+openflash-sbc-agent = { path = "firmware/sbc-agent", version = "3.1.0" }
 
 # Shared third-party dependencies
 serde = { version = "1.0", features = ["derive"] }

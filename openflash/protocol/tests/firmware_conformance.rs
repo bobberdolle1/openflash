@@ -47,11 +47,6 @@ const NOT_YET_MIGRATED: &[(&str, &str)] = &[
         "Ping is 0x00 not 0x01, NAND is 0x10-0x15 shifted by one, SPI NOR is at 0x70 not 0x60",
     ),
     (
-        "orange_pi",
-        "Ping is 0x00 not 0x01, NAND page ops are shifted, SPI is a single 0x20-0x24 block",
-    ),
-    ("banana_pi", "GetVersion is 0x03 not 0x0A"),
-    (
         "teensy4",
         "GetVersion is 0x03 not 0x0A; the rest of the table already matches",
     ),

@@ -1,240 +1,111 @@
-//! SPI interface for Banana Pi boards
+//! The Banana Pi's SPI controller, through Linux spidev.
 //!
-//! Uses Linux spidev for hardware SPI access.
-//! This is the recommended interface for flash operations on SBCs.
+//! One [`SpiBus`] call is one SPI transaction. That is the whole reason this uses
+//! `SPI_IOC_MESSAGE` (via the `spidev` crate) rather than plain `read`/`write` on
+//! the device node: separate syscalls let the kernel deassert chip select between
+//! them, and a flash chip that sees chip select go high after the opcode discards
+//! the command. The previous implementation did exactly that, and its own comment
+//! said so: "For full duplex, we need ioctl with spi_ioc_transfer".
 
-use std::fs::{File, OpenOptions};
-use std::io::{self, Read, Write};
-use std::os::unix::io::AsRawFd;
+use spidev::{SpiModeFlags, Spidev, SpidevOptions, SpidevTransfer};
 
-/// SPI mode flags
-pub const SPI_MODE_0: u8 = 0;
-pub const SPI_MODE_1: u8 = 1;
-pub const SPI_MODE_2: u8 = 2;
-pub const SPI_MODE_3: u8 = 3;
+use openflash_sbc_agent::{BusError, BusResult, SpiBus};
 
-/// SPI controller using spidev
-pub struct SpiDev {
-    file: File,
-    speed_hz: u32,
-    mode: u8,
+/// Device node the agent opens by default.
+pub const DEFAULT_DEVICE: &str = "/dev/spidev0.0";
+
+/// Clock rate for flash access.
+///
+/// 10 MHz is comfortable for every SPI NOR part and for the jumper wiring people
+/// actually use; the parts support more, the wiring often does not.
+const CLOCK_HZ: u32 = 10_000_000;
+
+/// The board's SPI bus, or a record of why it is unusable.
+pub struct SpidevBus {
+    device: Option<Spidev>,
+    unavailable_reason: String,
 }
 
-impl SpiDev {
-    /// Open SPI device
-    pub fn open(path: &str) -> io::Result<Self> {
-        let file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(path)?;
-        
+impl SpidevBus {
+    /// Open and configure a spidev device.
+    pub fn open(path: &str) -> std::io::Result<Self> {
+        let mut device = Spidev::open(path)?;
+        device.configure(
+            &SpidevOptions::new()
+                .bits_per_word(8)
+                .max_speed_hz(CLOCK_HZ)
+                .mode(SpiModeFlags::SPI_MODE_0)
+                .build(),
+        )?;
+
         Ok(Self {
-            file,
-            speed_hz: 1_000_000, // 1MHz default
-            mode: SPI_MODE_0,
+            device: Some(device),
+            unavailable_reason: String::new(),
         })
     }
-    
-    /// Set SPI speed
-    pub fn set_speed(&mut self, hz: u32) -> io::Result<()> {
-        self.speed_hz = hz;
-        // Use ioctl to set speed
-        unsafe {
-            let fd = self.file.as_raw_fd();
-            let speed = hz;
-            // SPI_IOC_WR_MAX_SPEED_HZ = 0x40046B04
-            if libc::ioctl(fd, 0x40046B04, &speed) < 0 {
-                return Err(io::Error::last_os_error());
-            }
+
+    /// A bus that is not there, carrying the reason so the host can be told.
+    pub fn unavailable(reason: String) -> Self {
+        Self {
+            device: None,
+            unavailable_reason: reason,
         }
-        Ok(())
     }
-    
-    /// Set SPI mode
-    pub fn set_mode(&mut self, mode: u8) -> io::Result<()> {
-        self.mode = mode;
-        unsafe {
-            let fd = self.file.as_raw_fd();
-            // SPI_IOC_WR_MODE = 0x40016B01
-            if libc::ioctl(fd, 0x40016B01, &mode) < 0 {
-                return Err(io::Error::last_os_error());
-            }
+
+    fn device(&self) -> BusResult<&Spidev> {
+        self.device
+            .as_ref()
+            .ok_or_else(|| BusError::Unavailable(self.unavailable_reason.clone()))
+    }
+}
+
+impl SpiBus for SpidevBus {
+    fn transfer(&mut self, write: &[u8], read: &mut [u8]) -> BusResult<()> {
+        debug_assert_eq!(write.len(), read.len(), "a transfer is symmetric");
+        let device = self.device()?;
+
+        // One ioctl, so chip select stays asserted for the whole exchange.
+        let mut transfer = SpidevTransfer::read_write(write, read);
+        device
+            .transfer(&mut transfer)
+            .map_err(|error| BusError::Transfer(error.to_string()))
+    }
+
+    fn write(&mut self, data: &[u8]) -> BusResult<()> {
+        let device = self.device()?;
+        let mut transfer = SpidevTransfer::write(data);
+        device
+            .transfer(&mut transfer)
+            .map_err(|error| BusError::Transfer(error.to_string()))
+    }
+
+    fn is_available(&self) -> bool {
+        self.device.is_some()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// CI has no spidev node, so what is testable here is that a missing bus is
+    /// reported rather than papered over — which is what the agent relies on to
+    /// advertise no interfaces.
+    #[test]
+    fn a_missing_device_is_reported_as_unavailable() {
+        let mut bus = SpidevBus::unavailable("no such device".to_string());
+        assert!(!bus.is_available());
+
+        let mut read = [0u8; 4];
+        match bus.transfer(&[0u8; 4], &mut read) {
+            Err(BusError::Unavailable(reason)) => assert_eq!(reason, "no such device"),
+            other => panic!("expected an unavailable error, got {other:?}"),
         }
-        Ok(())
+        assert!(matches!(bus.write(&[0x06]), Err(BusError::Unavailable(_))));
     }
-    
-    /// Transfer data (full duplex)
-    pub fn transfer(&mut self, tx: &[u8], rx: &mut [u8]) -> io::Result<()> {
-        // For simple transfers, we can use read/write
-        // For full duplex, we need ioctl with spi_ioc_transfer
-        self.file.write_all(tx)?;
-        self.file.read_exact(rx)?;
-        Ok(())
-    }
-    
-    /// Write data
-    pub fn write(&mut self, data: &[u8]) -> io::Result<()> {
-        self.file.write_all(data)
-    }
-    
-    /// Read data
-    pub fn read(&mut self, buffer: &mut [u8]) -> io::Result<()> {
-        self.file.read_exact(buffer)
-    }
-}
 
-/// Read JEDEC ID from SPI NOR flash
-pub fn read_jedec_id(spi_dev: &str) -> io::Result<[u8; 3]> {
-    let mut spi = SpiDev::open(spi_dev)?;
-    spi.set_speed(1_000_000)?; // 1MHz for ID read
-    
-    // Send JEDEC ID command (0x9F)
-    spi.write(&[0x9F])?;
-    
-    // Read 3 bytes
-    let mut id = [0u8; 3];
-    spi.read(&mut id)?;
-    
-    Ok(id)
-}
-
-/// Read SPI NAND ID
-pub fn read_spi_nand_id(spi_dev: &str) -> io::Result<[u8; 2]> {
-    let mut spi = SpiDev::open(spi_dev)?;
-    spi.set_speed(1_000_000)?;
-    
-    // Send Read ID command (0x9F) + dummy byte
-    spi.write(&[0x9F, 0x00])?;
-    
-    // Read 2 bytes
-    let mut id = [0u8; 2];
-    spi.read(&mut id)?;
-    
-    Ok(id)
-}
-
-/// SPI NAND operations
-pub struct SpiNand {
-    spi: SpiDev,
-}
-
-impl SpiNand {
-    pub fn new(spi_dev: &str) -> io::Result<Self> {
-        let mut spi = SpiDev::open(spi_dev)?;
-        spi.set_speed(40_000_000)?; // 40MHz
-        Ok(Self { spi })
-    }
-    
-    /// Reset chip
-    pub fn reset(&mut self) -> io::Result<()> {
-        self.spi.write(&[0xFF]) // Reset command
-    }
-    
-    /// Read ID
-    pub fn read_id(&mut self) -> io::Result<[u8; 2]> {
-        self.spi.write(&[0x9F, 0x00])?;
-        let mut id = [0u8; 2];
-        self.spi.read(&mut id)?;
-        Ok(id)
-    }
-    
-    /// Get feature register
-    pub fn get_feature(&mut self, addr: u8) -> io::Result<u8> {
-        self.spi.write(&[0x0F, addr])?;
-        let mut val = [0u8; 1];
-        self.spi.read(&mut val)?;
-        Ok(val[0])
-    }
-    
-    /// Set feature register
-    pub fn set_feature(&mut self, addr: u8, val: u8) -> io::Result<()> {
-        self.spi.write(&[0x1F, addr, val])
-    }
-    
-    /// Write enable
-    pub fn write_enable(&mut self) -> io::Result<()> {
-        self.spi.write(&[0x06])
-    }
-    
-    /// Page read to cache
-    pub fn page_read(&mut self, page_addr: u32) -> io::Result<()> {
-        let cmd = [
-            0x13, // Page Read command
-            ((page_addr >> 16) & 0xFF) as u8,
-            ((page_addr >> 8) & 0xFF) as u8,
-            (page_addr & 0xFF) as u8,
-        ];
-        self.spi.write(&cmd)
-    }
-    
-    /// Read from cache
-    pub fn read_cache(&mut self, col_addr: u16, buffer: &mut [u8]) -> io::Result<()> {
-        let cmd = [
-            0x03, // Read from cache
-            ((col_addr >> 8) & 0xFF) as u8,
-            (col_addr & 0xFF) as u8,
-            0x00, // Dummy byte
-        ];
-        self.spi.write(&cmd)?;
-        self.spi.read(buffer)
-    }
-}
-
-/// SPI NOR operations
-pub struct SpiNor {
-    spi: SpiDev,
-}
-
-impl SpiNor {
-    pub fn new(spi_dev: &str) -> io::Result<Self> {
-        let mut spi = SpiDev::open(spi_dev)?;
-        spi.set_speed(50_000_000)?; // 50MHz
-        Ok(Self { spi })
-    }
-    
-    /// Read JEDEC ID
-    pub fn read_jedec_id(&mut self) -> io::Result<[u8; 3]> {
-        self.spi.write(&[0x9F])?;
-        let mut id = [0u8; 3];
-        self.spi.read(&mut id)?;
-        Ok(id)
-    }
-    
-    /// Read status register
-    pub fn read_status(&mut self) -> io::Result<u8> {
-        self.spi.write(&[0x05])?;
-        let mut status = [0u8; 1];
-        self.spi.read(&mut status)?;
-        Ok(status[0])
-    }
-    
-    /// Write enable
-    pub fn write_enable(&mut self) -> io::Result<()> {
-        self.spi.write(&[0x06])
-    }
-    
-    /// Read data
-    pub fn read(&mut self, addr: u32, buffer: &mut [u8]) -> io::Result<()> {
-        let cmd = [
-            0x03, // Read command
-            ((addr >> 16) & 0xFF) as u8,
-            ((addr >> 8) & 0xFF) as u8,
-            (addr & 0xFF) as u8,
-        ];
-        self.spi.write(&cmd)?;
-        self.spi.read(buffer)
-    }
-    
-    /// Fast read
-    pub fn fast_read(&mut self, addr: u32, buffer: &mut [u8]) -> io::Result<()> {
-        let cmd = [
-            0x0B, // Fast Read command
-            ((addr >> 16) & 0xFF) as u8,
-            ((addr >> 8) & 0xFF) as u8,
-            (addr & 0xFF) as u8,
-            0x00, // Dummy byte
-        ];
-        self.spi.write(&cmd)?;
-        self.spi.read(buffer)
+    #[test]
+    fn opening_a_nonexistent_device_fails_rather_than_panicking() {
+        assert!(SpidevBus::open("/dev/definitely-not-a-spi-device").is_err());
     }
 }

@@ -41,9 +41,13 @@ jobs:
       - name: Test protocol, core and CLI
         run: cargo test -p openflash-protocol -p openflash-core -p openflash-cli --all-features
 
-      - name: Test the Raspberry Pi agent
+      - name: Test the single-board-computer agents
         if: runner.os == 'Linux'
-        run: cargo test -p openflash-firmware-raspberry-pi
+        run: |
+          cargo test -p openflash-sbc-agent \
+            -p openflash-firmware-raspberry-pi \
+            -p openflash-firmware-orange-pi \
+            -p openflash-firmware-banana-pi
 
   lint:
     name: Lint
@@ -67,7 +71,9 @@ jobs:
       - name: Clippy
         run: |
           cargo clippy -p openflash-protocol -p openflash-core -p openflash-cli \
-            -p openflash-firmware-raspberry-pi --all-targets --all-features -- -D warnings
+            -p openflash-sbc-agent -p openflash-firmware-raspberry-pi \
+            -p openflash-firmware-orange-pi -p openflash-firmware-banana-pi \
+            --all-targets --all-features -- -D warnings
 
   msrv:
     name: MSRV 1.77

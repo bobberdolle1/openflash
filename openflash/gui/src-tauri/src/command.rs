@@ -543,14 +543,24 @@ pub fn is_connected(device_manager: State<'_, Mutex<DeviceManager>>) -> Result<b
 /// Strip the spare area from a raw NAND dump, correcting each page with its ECC
 /// bytes.
 ///
-/// Wires up `flasher`, which was implemented but unreachable: no command
-/// exposed it, so the UI could not use ECC-aware processing at all.
+/// Returns the stripped data along with how many bits were repaired and which
+/// pages could not be repaired, so the UI can tell the user the dump is not
+/// wholly trustworthy instead of presenting damaged pages as clean.
+///
+/// Wires up `flasher`, which was implemented but unreachable: no command exposed
+/// it, so the UI could not use ECC-aware processing at all.
 #[tauri::command]
 pub fn process_dump_with_ecc(
     raw_data: Vec<u8>,
     config: crate::flasher::FlashConfig,
-) -> Result<Vec<u8>, String> {
+) -> Result<crate::flasher::EccProcessResult, String> {
     crate::flasher::process_dump_with_ecc(&raw_data, &config)
+}
+
+/// Whether an ECC-processed dump came through with every page intact or repaired.
+#[tauri::command]
+pub fn dump_is_clean(result: crate::flasher::EccProcessResult) -> bool {
+    result.is_clean()
 }
 
 /// Strip the spare area from a raw NAND dump without ECC correction.

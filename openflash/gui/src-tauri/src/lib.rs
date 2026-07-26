@@ -39,6 +39,7 @@ pub fn run() {
             command::erase_chip_range,
             command::verify_chip,
             command::process_dump_with_ecc,
+            command::dump_is_clean,
             command::extract_data_only,
             command::dump_statistics,
             command::dump_range,

@@ -34,7 +34,16 @@ version = "3.1.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/bobberdolle1/openflash"
-rust-version = "1.77"
+# Verified by the MSRV job, and by `cargo +1.85 check` before this was changed.
+#
+# It was 1.77, which had not been true for some time and nothing caught it,
+# because the CI job that checks it has never been able to run. Two separate
+# things push it up: nusb 0.2, the USB transport, needs 1.79, and the `toml`
+# crate the CLI uses pulls in indexmap → hashbrown 0.17, whose manifest is
+# edition 2024 and cannot even be *parsed* by a Cargo older than 1.85.
+#
+# The desktop app needs more still and overrides this; see gui/src-tauri.
+rust-version = "1.85"
 
 [workspace.dependencies]
 # Internal crates

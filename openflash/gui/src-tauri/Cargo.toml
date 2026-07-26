@@ -5,7 +5,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-rust-version.workspace = true
+# Higher than the workspace's 1.85: Tauri pulls in `time`, which requires 1.88.
+# Declared here rather than raising the whole workspace, so the library, the CLI
+# and the board agents keep the lower floor they actually build on.
+rust-version = "1.88"
 
 [lib]
 name = "openflash_gui_lib"

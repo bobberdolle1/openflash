@@ -76,18 +76,29 @@ jobs:
             --all-targets --all-features -- -D warnings
 
   msrv:
-    name: MSRV 1.77
+    name: MSRV 1.85
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.77
+      - uses: dtolnay/rust-toolchain@1.85
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: openflash
       - run: sudo apt-get update && sudo apt-get install -y libudev-dev
+      # Everything a user of the library, the CLI or a board agent builds. The
+      # desktop app is excluded because it declares a higher floor of its own —
+      # Tauri pulls in `time`, which needs 1.88 — and it is covered by the `gui`
+      # job on stable.
+      #
       # rust-toolchain.toml pins `stable` for day-to-day work; override it here.
       - name: Check against minimum supported Rust version
-        run: cargo +1.77 check -p openflash-protocol -p openflash-core -p openflash-cli
+        run: |
+          cargo +1.85 check \
+            -p openflash-protocol -p openflash-core -p openflash-cli \
+            -p openflash-sbc-agent -p pyopenflash \
+            -p openflash-firmware-raspberry-pi \
+            -p openflash-firmware-orange-pi -p openflash-firmware-banana-pi \
+            --all-targets
 
   gui:
     name: GUI (backend + frontend)

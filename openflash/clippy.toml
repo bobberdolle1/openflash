@@ -1,3 +1,0 @@
-# Keep in sync with workspace.package.rust-version in Cargo.toml, which is what
-# the `msrv` CI job verifies.
-msrv = "1.77.0"

@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/bobberdolle1/openflash/actions/workflows/ci.yml/badge.svg)](https://github.com/bobberdolle1/openflash/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/Rust-1.77%2B-orange.svg?logo=rust)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/Rust-1.85%2B-orange.svg?logo=rust)](https://www.rust-lang.org/)
 
 [English](#what-it-is) · [Русский](#по-русски)
 

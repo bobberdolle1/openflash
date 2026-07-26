@@ -48,8 +48,8 @@ impl GaloisField {
         let mut log_table = vec![-1i16; GF_N + 1];
 
         let mut x: u32 = 1;
-        for i in 0..GF_N {
-            exp_table[i] = x as u16;
+        for (i, entry) in exp_table.iter_mut().enumerate().take(GF_N) {
+            *entry = x as u16;
             log_table[x as usize] = i as i16;
 
             x <<= 1;
@@ -182,10 +182,11 @@ impl HammingEcc {
 
         let bit_errors: u32 = xor_result.iter().map(|b| b.count_ones()).sum();
 
-        if bit_errors == 0 {
+        // No difference means the data is intact. A single differing bit means
+        // the flipped bit is in the ECC bytes themselves, not in the data, so
+        // the data still needs no correction — both cases correct 0 data bits.
+        if bit_errors <= 1 {
             Ok(0)
-        } else if bit_errors == 1 {
-            Ok(0) // ECC area error
         } else if self.is_correctable(&xor_result) {
             let byte_pos = self.get_error_position(&xor_result);
             let bit_pos = (xor_result[0] & 0x07) as usize;
@@ -273,7 +274,7 @@ impl BchEcc {
     /// Calculate BCH ECC for data
     pub fn calculate(&self, data: &[u8]) -> Vec<u8> {
         let n_ecc_bits = self.generator.len() - 1;
-        let n_ecc_bytes = (n_ecc_bits + 7) / 8;
+        let n_ecc_bytes = n_ecc_bits.div_ceil(8);
 
         // Convert data to polynomial (bit representation)
         let mut remainder = vec![0u16; self.generator.len() - 1];
@@ -311,15 +312,12 @@ impl BchEcc {
     fn calculate_syndromes(&self, data: &[u8], ecc: &[u8]) -> Vec<u16> {
         let mut syndromes = vec![0u16; 2 * self.t as usize];
 
-        // Combine data and ECC into received polynomial
-        let total_bits = data.len() * 8 + ecc.len() * 8;
-
-        for i in 0..syndromes.len() {
+        for (i, slot) in syndromes.iter_mut().enumerate() {
             let alpha_i = self.gf.alpha(i + 1);
             let mut syndrome = 0u16;
             let mut alpha_power = 1u16;
 
-            // Evaluate r(α^(i+1))
+            // Evaluate r(α^(i+1)) over the received polynomial, data then ECC.
             for &byte in data.iter().chain(ecc.iter()) {
                 for bit_idx in (0..8).rev() {
                     let bit = (byte >> bit_idx) & 1;
@@ -330,7 +328,7 @@ impl BchEcc {
                 }
             }
 
-            syndromes[i] = syndrome;
+            *slot = syndrome;
         }
 
         syndromes
@@ -364,10 +362,12 @@ impl BchEcc {
                 let t = sigma.clone();
                 let scale = self.gf.div(delta, delta_b);
 
-                for i in 0..=n {
+                for (i, coeff) in sigma.iter_mut().enumerate().take(n + 1) {
+                    // Negative shifts wrap to a large usize and fail the bound
+                    // check, which is the intended "no such term" case.
                     let shift_idx = (i as i32 - m) as usize;
                     if shift_idx < b.len() {
-                        sigma[i] ^= self.gf.mul(scale, b[shift_idx]);
+                        *coeff ^= self.gf.mul(scale, b[shift_idx]);
                     }
                 }
 
@@ -377,10 +377,12 @@ impl BchEcc {
                 m = 1;
             } else {
                 let scale = self.gf.div(delta, delta_b);
-                for i in 0..=n {
+                for (i, coeff) in sigma.iter_mut().enumerate().take(n + 1) {
+                    // Negative shifts wrap to a large usize and fail the bound
+                    // check, which is the intended "no such term" case.
                     let shift_idx = (i as i32 - m) as usize;
                     if shift_idx < b.len() {
-                        sigma[i] ^= self.gf.mul(scale, b[shift_idx]);
+                        *coeff ^= self.gf.mul(scale, b[shift_idx]);
                     }
                 }
                 m += 1;

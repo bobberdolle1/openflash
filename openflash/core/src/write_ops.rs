@@ -352,10 +352,7 @@ impl WearLevelingManager {
         hot_blocks.sort_by_key(|b| std::cmp::Reverse(self.get_erase_count(*b)));
         cold_blocks.sort_by_key(|b| self.get_erase_count(*b));
 
-        hot_blocks
-            .into_iter()
-            .zip(cold_blocks.into_iter())
-            .collect()
+        hot_blocks.into_iter().zip(cold_blocks).collect()
     }
 
     /// Get wear statistics
@@ -527,6 +524,21 @@ impl ChipProgrammer {
     /// Set programming options
     pub fn set_options(&mut self, options: ProgramOptions) {
         self.options = options;
+    }
+
+    /// Bytes of spare (OOB) area per page.
+    pub fn oob_size(&self) -> u32 {
+        self.oob_size
+    }
+
+    /// Bytes written per page program, excluding the spare area.
+    pub fn page_size(&self) -> u32 {
+        self.page_size
+    }
+
+    /// Total bytes a page occupies on the chip, including its spare area.
+    pub fn page_stride(&self) -> u32 {
+        self.page_size + self.oob_size
     }
 
     /// Get bad block table reference

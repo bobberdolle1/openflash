@@ -926,12 +926,52 @@ pub fn calculate_row_address(block: u32, page_in_block: u32, pages_per_block: u3
     block * pages_per_block + page_in_block
 }
 
-/// Calculate column address (byte offset within page)
-pub fn calculate_column_address(offset: u16, include_oob: bool, page_size: u16) -> u16 {
-    if include_oob && offset >= page_size {
-        offset // OOB area
+/// Column address for a byte within a SPI NAND page.
+///
+/// SPI NAND addresses the page buffer linearly: the spare (OOB) area continues
+/// straight on from the main area, so the column address of any byte is just its
+/// offset from the start of the page. No translation is needed — this function
+/// exists to range-check the access, which is the part that is easy to get
+/// wrong.
+///
+/// Returns `None` when `offset` falls outside the page: past `page_size` when
+/// only the main area is addressable, or past `page_size + oob_size` when the
+/// spare area is included.
+pub fn calculate_column_address(
+    offset: u16,
+    include_oob: bool,
+    page_size: u16,
+    oob_size: u16,
+) -> Option<u16> {
+    let addressable = if include_oob {
+        page_size.saturating_add(oob_size)
     } else {
-        offset
+        page_size
+    };
+    (offset < addressable).then_some(offset)
+}
+
+#[cfg(test)]
+mod column_address_tests {
+    use super::calculate_column_address;
+
+    #[test]
+    fn offsets_inside_the_main_area_map_to_themselves() {
+        assert_eq!(calculate_column_address(0, false, 2048, 64), Some(0));
+        assert_eq!(calculate_column_address(2047, false, 2048, 64), Some(2047));
+    }
+
+    #[test]
+    fn the_spare_area_is_only_addressable_when_requested() {
+        // The first spare byte sits immediately after the main area.
+        assert_eq!(calculate_column_address(2048, true, 2048, 64), Some(2048));
+        assert_eq!(calculate_column_address(2048, false, 2048, 64), None);
+    }
+
+    #[test]
+    fn offsets_past_the_end_of_the_page_are_rejected() {
+        assert_eq!(calculate_column_address(2112, true, 2048, 64), None);
+        assert_eq!(calculate_column_address(u16::MAX, true, 2048, 64), None);
     }
 }
 

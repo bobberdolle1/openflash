@@ -24,7 +24,10 @@ pub enum CloudError {
     /// Network error
     NetworkError(String),
     /// Sync conflict
-    SyncConflict { local_version: u64, remote_version: u64 },
+    SyncConflict {
+        local_version: u64,
+        remote_version: u64,
+    },
     /// Rate limit exceeded
     RateLimitExceeded { retry_after_secs: u64 },
     /// Storage quota exceeded
@@ -45,14 +48,32 @@ impl std::fmt::Display for CloudError {
             Self::PermissionDenied(s) => write!(f, "Permission denied: {}", s),
             Self::NotFound(s) => write!(f, "Not found: {}", s),
             Self::NetworkError(s) => write!(f, "Network error: {}", s),
-            Self::SyncConflict { local_version, remote_version } => {
-                write!(f, "Sync conflict: local v{} vs remote v{}", local_version, remote_version)
+            Self::SyncConflict {
+                local_version,
+                remote_version,
+            } => {
+                write!(
+                    f,
+                    "Sync conflict: local v{} vs remote v{}",
+                    local_version, remote_version
+                )
             }
             Self::RateLimitExceeded { retry_after_secs } => {
-                write!(f, "Rate limit exceeded, retry after {} seconds", retry_after_secs)
+                write!(
+                    f,
+                    "Rate limit exceeded, retry after {} seconds",
+                    retry_after_secs
+                )
             }
-            Self::QuotaExceeded { used_bytes, limit_bytes } => {
-                write!(f, "Storage quota exceeded: {} / {} bytes", used_bytes, limit_bytes)
+            Self::QuotaExceeded {
+                used_bytes,
+                limit_bytes,
+            } => {
+                write!(
+                    f,
+                    "Storage quota exceeded: {} / {} bytes",
+                    used_bytes, limit_bytes
+                )
             }
             Self::InvalidData(s) => write!(f, "Invalid data: {}", s),
             Self::ServerError(s) => write!(f, "Server error: {}", s),
@@ -70,20 +91,15 @@ pub type CloudResult<T> = Result<T, CloudError>;
 // ============================================================================
 
 /// User subscription tier
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum SubscriptionTier {
     /// Free tier - basic features
+    #[default]
     Free,
     /// Pro tier - cloud sync, team features
     Pro,
     /// Enterprise tier - full features, priority support
     Enterprise,
-}
-
-impl Default for SubscriptionTier {
-    fn default() -> Self {
-        Self::Free
-    }
 }
 
 /// User profile
@@ -256,9 +272,10 @@ impl Default for SyncConfig {
 }
 
 /// Conflict resolution strategy
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ConflictResolution {
     /// Ask user to resolve
+    #[default]
     AskUser,
     /// Keep local version
     KeepLocal,
@@ -268,12 +285,6 @@ pub enum ConflictResolution {
     KeepBoth,
     /// Keep newest
     KeepNewest,
-}
-
-impl Default for ConflictResolution {
-    fn default() -> Self {
-        Self::AskUser
-    }
 }
 
 // ============================================================================
@@ -905,12 +916,12 @@ mod tests {
     #[test]
     fn test_feature_availability() {
         let mut cloud = OpenFlashCloud::default();
-        
+
         // Free tier
         assert!(cloud.has_feature("chip_crowdsourcing"));
         assert!(!cloud.has_feature("cloud_sync"));
         assert!(!cloud.has_feature("priority_support"));
-        
+
         // Pro tier
         cloud.state.user = Some(UserProfile {
             id: "test".to_string(),
@@ -936,7 +947,7 @@ mod tests {
     fn test_sync_item_queue() {
         let mut cloud = OpenFlashCloud::default();
         assert_eq!(cloud.state.pending_items, 0);
-        
+
         let item = SyncItem {
             id: "test-1".to_string(),
             item_type: SyncItemType::Dump,
@@ -954,7 +965,7 @@ mod tests {
             tags: vec![],
             shared_with: vec![],
         };
-        
+
         cloud.add_sync_item(item);
         assert_eq!(cloud.state.pending_items, 1);
         assert_eq!(cloud.pending_sync_items().len(), 1);
@@ -963,7 +974,10 @@ mod tests {
     #[test]
     fn test_cloud_command_from_u8() {
         assert_eq!(CloudCommand::from_u8(0xF0), Some(CloudCommand::CloudAuth));
-        assert_eq!(CloudCommand::from_u8(0xF9), Some(CloudCommand::CloudSubmitChip));
+        assert_eq!(
+            CloudCommand::from_u8(0xF9),
+            Some(CloudCommand::CloudSubmitChip)
+        );
         assert_eq!(CloudCommand::from_u8(0xFF), Some(CloudCommand::CloudStatus));
         assert_eq!(CloudCommand::from_u8(0x00), None);
     }

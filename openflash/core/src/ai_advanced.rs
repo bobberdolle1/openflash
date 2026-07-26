@@ -677,6 +677,12 @@ impl RootfsExtractor {
         self
     }
 
+    /// Report Unix mode, uid and gid on extracted entries.
+    pub fn with_permissions(mut self, preserve: bool) -> Self {
+        self.preserve_permissions = preserve;
+        self
+    }
+
     /// Detect filesystem type at offset
     pub fn detect_filesystem(&self, data: &[u8], offset: usize) -> Option<FilesystemType> {
         if offset + 4 > data.len() {
@@ -859,7 +865,9 @@ impl RootfsExtractor {
             .map(|(path, is_dir, mode)| ExtractedFile {
                 path: path.to_string(),
                 size: if *is_dir { 0 } else { 1024 },
-                mode: *mode,
+                // With permission preservation off, ownership and mode are
+                // reported as zero rather than carried over from the image.
+                mode: if self.preserve_permissions { *mode } else { 0 },
                 uid: 0,
                 gid: 0,
                 is_dir: *is_dir,
@@ -1001,6 +1009,14 @@ impl VulnScanner {
             check_credentials: true,
             check_weak_crypto: true,
         }
+    }
+
+    /// Version of the CVE signature set this scanner matches against.
+    ///
+    /// Reported alongside findings so a scan result can be tied to the data it
+    /// was produced from.
+    pub fn db_version(&self) -> &str {
+        &self.db_version
     }
 
     pub fn with_credentials_check(mut self, check: bool) -> Self {
@@ -1545,29 +1561,29 @@ fn estimate_section_size(data: &[u8], offset: usize, sig_type: &str) -> u64 {
             // Try to read size from header
             if offset + 64 <= data.len() {
                 // SquashFS: size at offset 40
-                if data.len() > offset + 4 && &data[offset..offset + 4] == [0x68, 0x73, 0x71, 0x73]
+                if data.len() > offset + 4
+                    && data[offset..offset + 4] == [0x68, 0x73, 0x71, 0x73]
+                    && offset + 48 <= data.len()
                 {
-                    if offset + 48 <= data.len() {
-                        let size = u64::from_le_bytes([
-                            data[offset + 40],
-                            data[offset + 41],
-                            data[offset + 42],
-                            data[offset + 43],
-                            data[offset + 44],
-                            data[offset + 45],
-                            data[offset + 46],
-                            data[offset + 47],
-                        ]);
-                        if size > 0 && size <= remaining as u64 {
-                            return size;
-                        }
+                    let size = u64::from_le_bytes([
+                        data[offset + 40],
+                        data[offset + 41],
+                        data[offset + 42],
+                        data[offset + 43],
+                        data[offset + 44],
+                        data[offset + 45],
+                        data[offset + 46],
+                        data[offset + 47],
+                    ]);
+                    if size > 0 && size <= remaining as u64 {
+                        return size;
                     }
                 }
             }
             // Default: use remaining data
             remaining.max(64) as u64
         }
-        _ => remaining.min(1024 * 1024).max(64) as u64,
+        _ => remaining.clamp(64, 1024 * 1024) as u64,
     }
 }
 

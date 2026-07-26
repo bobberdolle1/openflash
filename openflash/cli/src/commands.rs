@@ -1192,7 +1192,7 @@ pub fn device_add(
         &format!("dev-{}", uuid_simple()),
         name,
         uri,
-        DevicePlatform::from_str(platform),
+        DevicePlatform::from_name(platform),
     );
 
     println!("{}", "Device added successfully!".green());

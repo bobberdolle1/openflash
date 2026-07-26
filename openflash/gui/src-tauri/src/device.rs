@@ -1,159 +1,136 @@
-//! USB device management for OpenFlash
+//! Device management for the GUI, on top of `openflash_core`.
+//!
+//! This used to hold its own USB code, its own copy of the protocol framing and
+//! its own chip-info plumbing. That copy had never compiled — the `UsbDevice`
+//! struct header was missing, leaving a dangling field — and its `read_page`
+//! consumed the first 64 bytes of page data as an acknowledgement and then read
+//! 64 bytes past the end of the page, desynchronising the link.
+//!
+//! Everything now goes through `openflash_core::transport` and
+//! `openflash_core::device`, the same code the CLI uses, so there is one
+//! implementation of talking to a device rather than two.
 
-use nusb::transfer::RequestBuffer;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use tokio::sync::Mutex as TokioMutex;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream;
+
+use openflash_core::device::{Device, ProgramOptions};
+use openflash_core::emulator::EmulatedDevice;
+use openflash_core::protocol::{Command, Platform};
 #[cfg(unix)]
-use tokio::net::UnixStream;
+use openflash_core::transport::UnixTransport;
+#[cfg(feature = "usb")]
+use openflash_core::transport::{list_devices, UsbTransport};
+use openflash_core::transport::{TcpTransport, Transport};
 
-use openflash_core::protocol::{Command, Packet};
+pub use openflash_core::protocol::FlashInterface;
 
-const VENDOR_ID: u16 = 0xC0DE;
-const PRODUCT_ID: u16 = 0xCAFE;
-const EP_OUT: u8 = 0x01;
-const EP_IN: u8 = 0x81;
+/// Size of the emulated chip offered by the GUI's demo mode.
+const EMULATED_CHIP_SIZE: usize = 2 * 1024 * 1024;
 
-/// Flash interface type
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub enum FlashInterface {
-    #[default]
-    ParallelNand,
-    SpiNand,
-    SpiNor,
-    Ufs,
-    Emmc,
-}
-
-/// Device platform type
+/// Board the connected device runs on.
+///
+/// Mirrors `openflash_protocol::Platform`, kept as its own type because the
+/// frontend deserialises these names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DevicePlatform {
     Unknown,
-    Rp2040,      // 0x01 - Raspberry Pi Pico
-    Stm32f1,     // 0x02 - Blue Pill
-    Stm32f4,     // 0x03 - Black Pill
-    Esp32,       // 0x04 - ESP32
-    Rp2350,      // 0x05 - Raspberry Pi Pico 2
-    RaspberryPi, // 0x10 - Raspberry Pi SBC
-    OrangePi,    // 0x11 - Orange Pi SBC
-    BananaPi,    // 0x12 - Banana Pi SBC
-    ArduinoGiga, // 0x20 - Arduino GIGA R1 WiFi
-    Teensy40,    // 0x30 - Teensy 4.0
-    Teensy41,    // 0x31 - Teensy 4.1
+    Rp2040,
+    Stm32f1,
+    Stm32f4,
+    Esp32,
+    Rp2350,
+    RaspberryPi,
+    OrangePi,
+    BananaPi,
+    ArduinoGiga,
+    Teensy40,
+    Teensy41,
+}
+
+impl From<Option<Platform>> for DevicePlatform {
+    fn from(platform: Option<Platform>) -> Self {
+        match platform {
+            Some(Platform::Rp2040) => Self::Rp2040,
+            Some(Platform::Stm32f1) => Self::Stm32f1,
+            Some(Platform::Stm32f4) => Self::Stm32f4,
+            Some(Platform::Esp32) => Self::Esp32,
+            Some(Platform::Rp2350) => Self::Rp2350,
+            Some(Platform::RaspberryPi) => Self::RaspberryPi,
+            Some(Platform::OrangePi) => Self::OrangePi,
+            Some(Platform::BananaPi) => Self::BananaPi,
+            Some(Platform::ArduinoGiga) => Self::ArduinoGiga,
+            Some(Platform::Teensy40) => Self::Teensy40,
+            Some(Platform::Teensy41) => Self::Teensy41,
+            None => Self::Unknown,
+        }
+    }
 }
 
 impl DevicePlatform {
-    pub fn from_id(id: u8) -> Self {
-        match id {
-            0x01 => DevicePlatform::Rp2040,
-            0x02 => DevicePlatform::Stm32f1,
-            0x03 => DevicePlatform::Stm32f4,
-            0x04 => DevicePlatform::Esp32,
-            0x05 => DevicePlatform::Rp2350,
-            0x10 => DevicePlatform::RaspberryPi,
-            0x11 => DevicePlatform::OrangePi,
-            0x12 | 0x13 | 0x14 => DevicePlatform::BananaPi,
-            0x20 => DevicePlatform::ArduinoGiga,
-            0x30 => DevicePlatform::Teensy40,
-            0x31 => DevicePlatform::Teensy41,
-            _ => DevicePlatform::Unknown,
-        }
-    }
-
     pub fn name(&self) -> &'static str {
         match self {
-            DevicePlatform::Unknown => "Unknown",
-            DevicePlatform::Rp2040 => "Raspberry Pi Pico",
-            DevicePlatform::Stm32f1 => "STM32F1 Blue Pill",
-            DevicePlatform::Stm32f4 => "STM32F4 Black Pill",
-            DevicePlatform::Esp32 => "ESP32",
-            DevicePlatform::Rp2350 => "Raspberry Pi Pico 2",
-            DevicePlatform::RaspberryPi => "Raspberry Pi",
-            DevicePlatform::OrangePi => "Orange Pi",
-            DevicePlatform::BananaPi => "Banana Pi",
-            DevicePlatform::ArduinoGiga => "Arduino GIGA R1 WiFi",
-            DevicePlatform::Teensy40 => "Teensy 4.0",
-            DevicePlatform::Teensy41 => "Teensy 4.1",
-        }
-    }
-
-    pub fn icon(&self) -> &'static str {
-        match self {
-            DevicePlatform::Unknown => "❓",
-            DevicePlatform::Rp2040 => "🍓",
-            DevicePlatform::Stm32f1 => "💙",
-            DevicePlatform::Stm32f4 => "🖤",
-            DevicePlatform::Esp32 => "📶",
-            DevicePlatform::Rp2350 => "🍓",
-            DevicePlatform::RaspberryPi => "🥧",
-            DevicePlatform::OrangePi => "🍊",
-            DevicePlatform::BananaPi => "🍌",
-            DevicePlatform::ArduinoGiga => "🔵",
-            DevicePlatform::Teensy40 => "⚡",
-            DevicePlatform::Teensy41 => "⚡",
+            Self::Unknown => "Unknown device",
+            Self::Rp2040 => "Raspberry Pi Pico (RP2040)",
+            Self::Stm32f1 => "STM32F103 (Blue Pill)",
+            Self::Stm32f4 => "STM32F4 (Black Pill)",
+            Self::Esp32 => "ESP32",
+            Self::Rp2350 => "Raspberry Pi Pico 2 (RP2350)",
+            Self::RaspberryPi => "Raspberry Pi (SBC)",
+            Self::OrangePi => "Orange Pi (SBC)",
+            Self::BananaPi => "Banana Pi (SBC)",
+            Self::ArduinoGiga => "Arduino GIGA R1 WiFi",
+            Self::Teensy40 => "Teensy 4.0",
+            Self::Teensy41 => "Teensy 4.1",
         }
     }
 
     pub fn is_sbc(&self) -> bool {
-        matches!(self, DevicePlatform::RaspberryPi | DevicePlatform::OrangePi | DevicePlatform::BananaPi)
-    }
-
-    pub fn is_high_speed(&self) -> bool {
-        matches!(self, DevicePlatform::Teensy40 | DevicePlatform::Teensy41 | DevicePlatform::ArduinoGiga)
-    }
-
-    pub fn has_sd_card(&self) -> bool {
-        matches!(self, DevicePlatform::Teensy41)
+        matches!(self, Self::RaspberryPi | Self::OrangePi | Self::BananaPi)
     }
 }
 
-/// Device capabilities bitmap
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+/// Which interfaces the connected device implements.
+///
+/// Derived from the interface bitmap in the device's `GetVersion` reply, so it
+/// reflects what the firmware actually supports rather than what the board could
+/// support in principle.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 pub struct DeviceCapabilities {
     pub parallel_nand: bool,
     pub spi_nand: bool,
     pub spi_nor: bool,
     pub emmc: bool,
-    pub nvddr: bool,           // NV-DDR timing support (RP2350)
-    pub hardware_ecc: bool,    // Hardware ECC (STM32H747 FMC)
-    pub wifi: bool,            // WiFi connectivity
-    pub bluetooth: bool,       // Bluetooth connectivity
-    pub high_speed_usb: bool,  // USB HS (480Mbps) - Teensy 4.x
-    pub sd_card: bool,         // SD card slot (Teensy 4.1)
-    pub logic_analyzer: bool,  // Logic analyzer mode (Teensy 4.x)
-    pub soft_ecc: bool,        // Soft ECC on-the-fly (Teensy 4.x)
+    pub ufs: bool,
 }
 
 impl DeviceCapabilities {
-    pub fn from_bitmap(bitmap: u32) -> Self {
+    fn from_version(version: &openflash_core::protocol::VersionInfo) -> Self {
         Self {
-            parallel_nand: bitmap & 0x01 != 0,
-            spi_nand: bitmap & 0x02 != 0,
-            spi_nor: bitmap & 0x04 != 0,
-            emmc: bitmap & 0x08 != 0,
-            nvddr: bitmap & 0x10 != 0,
-            hardware_ecc: bitmap & 0x20 != 0,
-            wifi: bitmap & 0x40 != 0,
-            bluetooth: bitmap & 0x80 != 0,
-            high_speed_usb: bitmap & 0x100 != 0,
-            sd_card: bitmap & 0x200 != 0,
-            logic_analyzer: bitmap & 0x400 != 0,
-            soft_ecc: bitmap & 0x800 != 0,
+            parallel_nand: version.supports(FlashInterface::ParallelNand),
+            spi_nand: version.supports(FlashInterface::SpiNand),
+            spi_nor: version.supports(FlashInterface::SpiNor),
+            emmc: version.supports(FlashInterface::Emmc),
+            ufs: version.supports(FlashInterface::Ufs),
         }
     }
 }
 
-/// Connection type for device
+/// How a device is reached.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ConnectionType {
     Usb,
-    Tcp { host: String, port: u16 },
+    Tcp {
+        host: String,
+        port: u16,
+    },
     #[cfg(unix)]
-    UnixSocket { path: String },
+    UnixSocket {
+        path: String,
+    },
+    /// The in-process emulator. Always surfaced to the user as emulated.
+    Emulated,
 }
 
+/// A device the GUI knows about.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceInfo {
     pub id: String,
@@ -170,8 +147,12 @@ pub struct DeviceInfo {
     pub protocol_version: Option<u8>,
     #[serde(default)]
     pub firmware_version: Option<String>,
+    /// True when this entry is the emulator rather than hardware.
+    #[serde(default)]
+    pub emulated: bool,
 }
 
+/// Chip details shown in the UI.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChipInfo {
     pub manufacturer: String,
@@ -181,7 +162,6 @@ pub struct ChipInfo {
     pub page_size: u32,
     pub block_size: u32,
     pub interface: FlashInterface,
-    // SPI NOR specific fields
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sector_size: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -196,7 +176,6 @@ pub struct ChipInfo {
     pub max_clock_mhz: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub protected: Option<bool>,
-    // UFS specific fields
     #[serde(skip_serializing_if = "Option::is_none")]
     pub luns: Option<Vec<UfsLunInfo>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -205,9 +184,13 @@ pub struct ChipInfo {
     pub serial_number: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub boot_lun_enabled: Option<bool>,
+    /// Whether the chip id matched the database exactly, or the geometry was
+    /// inferred from the capacity byte.
+    #[serde(default)]
+    pub exact_match: bool,
 }
 
-/// UFS Logical Unit information
+/// UFS logical unit details.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UfsLunInfo {
     #[serde(rename = "type")]
@@ -218,378 +201,417 @@ pub struct UfsLunInfo {
     pub write_protected: bool,
 }
 
-pub struct UsbDevice {
-    interface: nusb::Interface,
-}
-
-/// Network device (TCP or Unix socket)
-pub struct NetworkDevice {
-    stream: NetworkStream,
-}
-
-enum NetworkStream {
-    Tcp(TcpStream),
-    #[cfg(unix)]
-    Unix(UnixStream),
-}
-
-impl NetworkDevice {
-    pub async fn connect_tcp(host: &str, port: u16) -> Result<Self, String> {
-        let addr = format!("{}:{}", host, port);
-        let stream = TcpStream::connect(&addr)
-            .await
-            .map_err(|e| format!("TCP connection failed: {}", e))?;
-        Ok(Self {
-            stream: NetworkStream::Tcp(stream),
-        })
-    }
-
-    #[cfg(unix)]
-    pub async fn connect_unix(path: &str) -> Result<Self, String> {
-        let stream = UnixStream::connect(path)
-            .await
-            .map_err(|e| format!("Unix socket connection failed: {}", e))?;
-        Ok(Self {
-            stream: NetworkStream::Unix(stream),
-        })
-    }
-
-    pub async fn send_command(&mut self, cmd: Command, args: &[u8]) -> Result<Vec<u8>, String> {
-        let packet = Packet::new(cmd, args);
-        let data = packet.to_bytes();
-
-        // Send command
-        match &mut self.stream {
-            NetworkStream::Tcp(stream) => {
-                stream.write_all(&data).await
-                    .map_err(|e| format!("TCP write error: {}", e))?;
-            }
-            #[cfg(unix)]
-            NetworkStream::Unix(stream) => {
-                stream.write_all(&data).await
-                    .map_err(|e| format!("Unix socket write error: {}", e))?;
-            }
-        }
-
-        // Receive response
-        let mut response = vec![0u8; 64];
-        match &mut self.stream {
-            NetworkStream::Tcp(stream) => {
-                stream.read_exact(&mut response).await
-                    .map_err(|e| format!("TCP read error: {}", e))?;
-            }
-            #[cfg(unix)]
-            NetworkStream::Unix(stream) => {
-                stream.read_exact(&mut response).await
-                    .map_err(|e| format!("Unix socket read error: {}", e))?;
-            }
-        }
-
-        Ok(response)
-    }
-}
-
-/// Active device connection (USB or Network)
-pub enum ActiveDevice {
-    Usb(Arc<TokioMutex<UsbDevice>>),
-    Network(Arc<TokioMutex<NetworkDevice>>),
-}
-    interface: nusb::Interface,
-}
-
-impl UsbDevice {
-    pub async fn send_command(&self, cmd: Command, args: &[u8]) -> Result<Vec<u8>, String> {
-        let packet = Packet::new(cmd, args);
-        let data = packet.to_bytes();
-
-        // Send command
-        self.interface
-            .bulk_out(EP_OUT, data.to_vec())
-            .await
-            .status
-            .map_err(|e| format!("USB write error: {:?}", e))?;
-
-        // Receive response
-        let buf = RequestBuffer::new(64);
-        let result = self.interface.bulk_in(EP_IN, buf).await;
-
-        result
-            .status
-            .map_err(|e| format!("USB read error: {:?}", e))?;
-        Ok(result.data)
-    }
-
-    pub async fn read_page(&self, page_addr: u32, page_size: u16) -> Result<Vec<u8>, String> {
-        let mut args = [0u8; 6];
-        args[0..4].copy_from_slice(&page_addr.to_le_bytes());
-        args[4..6].copy_from_slice(&page_size.to_le_bytes());
-
-        self.send_command(Command::NandReadPage, &args).await?;
-
-        let mut data = Vec::with_capacity(page_size as usize);
-        while data.len() < page_size as usize {
-            let buf = RequestBuffer::new(64);
-            let result = self.interface.bulk_in(EP_IN, buf).await;
-            result
-                .status
-                .map_err(|e| format!("USB read error: {:?}", e))?;
-
-            let remaining = page_size as usize - data.len();
-            let to_copy = remaining.min(result.data.len());
-            data.extend_from_slice(&result.data[..to_copy]);
-        }
-
-        Ok(data)
-    }
-}
-
+/// Holds the discovered devices and the open connection, if any.
 pub struct DeviceManager {
-    devices: Vec<DeviceInfo>,
-    active_device: Option<ActiveDevice>,
+    discovered: Vec<DeviceInfo>,
+    active: Option<Device<Box<dyn Transport>>>,
+    active_id: Option<String>,
     interface: FlashInterface,
-    current_platform: Option<DevicePlatform>,
-    current_capabilities: Option<DeviceCapabilities>,
 }
 
 impl DeviceManager {
     pub fn new() -> Self {
         Self {
-            devices: Vec::new(),
-            active_device: None,
-            interface: FlashInterface::ParallelNand,
-            current_platform: None,
-            current_capabilities: None,
+            discovered: Vec::new(),
+            active: None,
+            active_id: None,
+            interface: FlashInterface::SpiNor,
         }
     }
 
-    pub fn set_interface(&mut self, interface: FlashInterface) {
-        self.interface = interface;
-    }
-
-    pub fn get_interface(&self) -> FlashInterface {
-        self.interface
-    }
-
-    pub fn get_platform(&self) -> Option<DevicePlatform> {
-        self.current_platform
-    }
-
-    pub fn get_capabilities(&self) -> Option<&DeviceCapabilities> {
-        self.current_capabilities.as_ref()
-    }
-
+    /// Enumerate attached devices, plus the always-available emulator entry.
     pub fn scan_devices(&mut self) -> Vec<DeviceInfo> {
-        self.devices.clear();
+        let mut devices = Vec::new();
 
-        // Scan USB devices
-        if let Ok(devices) = nusb::list_devices() {
-            for dev_info in devices {
-                if dev_info.vendor_id() == VENDOR_ID && dev_info.product_id() == PRODUCT_ID {
-                    let id = format!(
-                        "{:04x}:{:04x}:{}",
-                        dev_info.vendor_id(),
-                        dev_info.product_id(),
-                        dev_info.bus_number()
-                    );
-
-                    let name = dev_info
-                        .product_string()
-                        .unwrap_or("OpenFlash Device")
-                        .to_string();
-
-                    let serial = dev_info.serial_number().map(|s| s.to_string());
-
-                    self.devices.push(DeviceInfo {
-                        id,
-                        name,
-                        serial,
+        #[cfg(feature = "usb")]
+        match list_devices() {
+            Ok(found) => {
+                for device in found {
+                    devices.push(DeviceInfo {
+                        id: device.selector(),
+                        name: device
+                            .product
+                            .clone()
+                            .unwrap_or_else(|| "OpenFlash device".to_string()),
+                        serial: device.serial_number.clone(),
                         connected: false,
                         platform: None,
                         capabilities: None,
                         connection_type: Some(ConnectionType::Usb),
                         protocol_version: None,
                         firmware_version: None,
+                        emulated: false,
                     });
                 }
             }
+            // A host with no USB subsystem is not an error worth failing a scan
+            // over; the list simply has no hardware in it.
+            Err(error) => log_scan_failure(&error.to_string()),
         }
 
-        self.devices.clone()
-    }
-
-    /// Add a network device (SBC) manually
-    pub fn add_network_device(&mut self, host: String, port: u16, name: Option<String>) {
-        let id = format!("tcp:{}:{}", host, port);
-        let device_name = name.unwrap_or_else(|| format!("Network Device ({}:{})", host, port));
-        
-        self.devices.push(DeviceInfo {
-            id,
-            name: device_name,
+        devices.push(DeviceInfo {
+            id: "emulated".to_string(),
+            name: "Emulated SPI NOR chip (no hardware)".to_string(),
             serial: None,
             connected: false,
             platform: None,
             capabilities: None,
-            connection_type: Some(ConnectionType::Tcp { host, port }),
+            connection_type: Some(ConnectionType::Emulated),
             protocol_version: None,
             firmware_version: None,
+            emulated: true,
         });
-    }
 
-    /// Add a Unix socket device (local SBC)
-    #[cfg(unix)]
-    pub fn add_unix_socket_device(&mut self, path: String, name: Option<String>) {
-        let id = format!("unix:{}", path);
-        let device_name = name.unwrap_or_else(|| format!("Local Device ({})", path));
-        
-        self.devices.push(DeviceInfo {
-            id,
-            name: device_name,
-            serial: None,
-            connected: false,
-            platform: None,
-            capabilities: None,
-            connection_type: Some(ConnectionType::UnixSocket { path }),
-            protocol_version: None,
-            firmware_version: None,
-        });
+        self.discovered = devices.clone();
+        devices
     }
 
     pub fn list_devices(&self) -> Vec<DeviceInfo> {
-        self.devices.clone()
+        self.discovered
+            .iter()
+            .cloned()
+            .map(|mut device| {
+                device.connected = self.active_id.as_deref() == Some(device.id.as_str());
+                device
+            })
+            .collect()
     }
 
-    pub fn connect(&mut self, device_id: &str) -> Result<(), String> {
-        // Check if it's a network device
-        if device_id.starts_with("tcp:") {
-            return Err("Use connect_network for TCP devices".to_string());
-        }
-        
-        #[cfg(unix)]
-        if device_id.starts_with("unix:") {
-            return Err("Use connect_unix_socket for Unix socket devices".to_string());
-        }
-
-        let devices = nusb::list_devices().map_err(|e| format!("Failed to list devices: {}", e))?;
-
-        for dev_info in devices {
-            let id = format!(
-                "{:04x}:{:04x}:{}",
-                dev_info.vendor_id(),
-                dev_info.product_id(),
-                dev_info.bus_number()
-            );
-
-            if id == device_id {
-                let device = dev_info
-                    .open()
-                    .map_err(|e| format!("Failed to open device: {}", e))?;
-
-                let interface = device
-                    .claim_interface(0)
-                    .map_err(|e| format!("Failed to claim interface: {}", e))?;
-
-                self.active_device = Some(ActiveDevice::Usb(
-                    Arc::new(TokioMutex::new(UsbDevice { interface }))
-                ));
-
-                for dev in &mut self.devices {
-                    if dev.id == device_id {
-                        dev.connected = true;
-                    }
-                }
-
-                return Ok(());
+    /// Connect to a device by the id `scan_devices` reported.
+    ///
+    /// `emulated` connects to the in-process emulator; `tcp:host:port` and
+    /// `unix:/path` reach an SBC agent; anything else is treated as a USB serial
+    /// number or bus address.
+    pub fn connect(&mut self, id: &str) -> Result<(), String> {
+        let transport: Box<dyn Transport> = if id == "emulated" {
+            Box::new(EmulatedDevice::new(
+                "EMULATED",
+                [0xEF, 0x40, 0x15],
+                EMULATED_CHIP_SIZE,
+            ))
+        } else if let Some(endpoint) = id.strip_prefix("tcp:") {
+            Box::new(
+                TcpTransport::connect(endpoint, openflash_core::transport::DEFAULT_TIMEOUT)
+                    .map_err(|e| format!("cannot reach an agent at {endpoint}: {e}"))?,
+            )
+        } else if let Some(path) = id.strip_prefix("unix:") {
+            #[cfg(unix)]
+            {
+                Box::new(
+                    UnixTransport::connect(path)
+                        .map_err(|e| format!("cannot reach an agent on {path}: {e}"))?,
+                )
             }
-        }
-
-        Err("Device not found".to_string())
-    }
-
-    /// Connect to a network device (TCP)
-    pub async fn connect_network(&mut self, host: &str, port: u16) -> Result<(), String> {
-        let network_device = NetworkDevice::connect_tcp(host, port).await?;
-        
-        self.active_device = Some(ActiveDevice::Network(
-            Arc::new(TokioMutex::new(network_device))
-        ));
-
-        let device_id = format!("tcp:{}:{}", host, port);
-        for dev in &mut self.devices {
-            if dev.id == device_id {
-                dev.connected = true;
+            #[cfg(not(unix))]
+            {
+                let _ = path;
+                return Err("Unix sockets are not available on this platform".to_string());
             }
-        }
-
-        Ok(())
-    }
-
-    /// Connect to a Unix socket device
-    #[cfg(unix)]
-    pub async fn connect_unix_socket(&mut self, path: &str) -> Result<(), String> {
-        let network_device = NetworkDevice::connect_unix(path).await?;
-        
-        self.active_device = Some(ActiveDevice::Network(
-            Arc::new(TokioMutex::new(network_device))
-        ));
-
-        let device_id = format!("unix:{}", path);
-        for dev in &mut self.devices {
-            if dev.id == device_id {
-                dev.connected = true;
+        } else {
+            #[cfg(feature = "usb")]
+            {
+                Box::new(UsbTransport::open(id).map_err(|e| e.to_string())?)
             }
+            #[cfg(not(feature = "usb"))]
+            {
+                return Err("this build was compiled without USB support".to_string());
+            }
+        };
+
+        let device = Device::connect(transport).map_err(|e| e.to_string())?;
+        self.interface = FlashInterface::SpiNor;
+        self.active_id = Some(id.to_string());
+
+        // Fill in what the device reported so the UI can show it.
+        let version = *device.version();
+        if let Some(entry) = self.discovered.iter_mut().find(|d| d.id == id) {
+            entry.platform = Some(DevicePlatform::from(version.platform));
+            entry.capabilities = Some(DeviceCapabilities::from_version(&version));
+            entry.protocol_version = Some(version.protocol);
+            entry.firmware_version = Some(format!(
+                "{}.{}.{}",
+                version.firmware.0, version.firmware.1, version.firmware.2
+            ));
         }
 
+        self.active = Some(device);
         Ok(())
     }
 
     pub fn disconnect(&mut self) {
-        self.active_device = None;
-        self.current_platform = None;
-        self.current_capabilities = None;
-        for dev in &mut self.devices {
-            dev.connected = false;
-        }
+        self.active = None;
+        self.active_id = None;
     }
 
-    pub fn get_active_device(&self) -> Option<Arc<TokioMutex<UsbDevice>>> {
-        match &self.active_device {
-            Some(ActiveDevice::Usb(dev)) => Some(dev.clone()),
-            _ => None,
-        }
+    pub fn is_connected(&self) -> bool {
+        self.active.is_some()
     }
 
-    pub fn get_active_network_device(&self) -> Option<Arc<TokioMutex<NetworkDevice>>> {
-        match &self.active_device {
-            Some(ActiveDevice::Network(dev)) => Some(dev.clone()),
-            _ => None,
-        }
+    /// Whether the open connection is the emulator.
+    pub fn is_emulated(&self) -> bool {
+        self.active_id.as_deref() == Some("emulated")
     }
 
-    pub fn is_network_connection(&self) -> bool {
-        matches!(&self.active_device, Some(ActiveDevice::Network(_)))
+    pub fn get_interface(&self) -> FlashInterface {
+        self.interface
     }
 
-    /// Update device info after connection (platform, capabilities, etc.)
-    pub fn update_device_info(&mut self, platform: DevicePlatform, capabilities: DeviceCapabilities, 
-                               protocol_version: u8, firmware_version: Option<String>) {
-        self.current_platform = Some(platform);
-        self.current_capabilities = Some(capabilities.clone());
-        
-        // Update the connected device in the list
-        for dev in &mut self.devices {
-            if dev.connected {
-                dev.platform = Some(platform);
-                dev.capabilities = Some(capabilities.clone());
-                dev.protocol_version = Some(protocol_version);
-                dev.firmware_version = firmware_version.clone();
-                dev.name = format!("{} {}", platform.icon(), platform.name());
-            }
-        }
+    /// Ask the device to switch interfaces.
+    pub fn set_interface(&mut self, interface: FlashInterface) -> Result<(), String> {
+        self.device_mut()?
+            .set_interface(interface)
+            .map_err(|e| e.to_string())?;
+        self.interface = interface;
+        Ok(())
+    }
+
+    fn device_mut(&mut self) -> Result<&mut Device<Box<dyn Transport>>, String> {
+        self.active
+            .as_mut()
+            .ok_or_else(|| "No device connected".to_string())
+    }
+
+    /// Send a command and return the response payload.
+    ///
+    /// The payload is the data alone: a non-`Ok` status from the device becomes
+    /// an error here, so callers no longer have to check a status byte and can
+    /// no longer forget to.
+    pub fn send_command(&mut self, command: Command, payload: &[u8]) -> Result<Vec<u8>, String> {
+        let device = self.device_mut()?;
+        device
+            .transport_mut()
+            .transact(command, payload, openflash_core::transport::DEFAULT_TIMEOUT)
+            .map_err(|e| e.to_string())
+    }
+
+    /// Read the chip id and look it up.
+    pub fn identify(&mut self) -> Result<ChipInfo, String> {
+        let chip = self.device_mut()?.identify().map_err(|e| e.to_string())?;
+        Ok(ChipInfo {
+            manufacturer: chip.manufacturer,
+            model: chip.model,
+            chip_id: chip.jedec_id.to_vec(),
+            size_mb: (chip.capacity / (1024 * 1024)) as u32,
+            page_size: chip.page_size,
+            block_size: chip.sector_size,
+            interface: FlashInterface::SpiNor,
+            sector_size: Some(chip.sector_size),
+            jedec_id: Some(chip.jedec_id.to_vec()),
+            has_qspi: None,
+            has_dual: None,
+            voltage: None,
+            max_clock_mhz: None,
+            protected: None,
+            luns: None,
+            ufs_version: None,
+            serial_number: None,
+            boot_lun_enabled: None,
+            exact_match: chip.exact_match,
+        })
+    }
+
+    /// Capacity of the connected chip in bytes.
+    pub fn capacity(&mut self) -> Result<u64, String> {
+        Ok(self.identify()?.size_mb as u64 * 1024 * 1024)
+    }
+
+    /// Read a range into memory.
+    pub fn read_range(&mut self, start: u64, length: u64) -> Result<Vec<u8>, String> {
+        self.device_mut()?
+            .read_to_vec(start, length)
+            .map_err(|e| e.to_string())
+    }
+
+    /// Read a range, reporting progress as `(bytes_done, bytes_total)`.
+    pub fn read_range_with_progress(
+        &mut self,
+        start: u64,
+        length: u64,
+        progress: &mut dyn FnMut(u64, u64),
+    ) -> Result<Vec<u8>, String> {
+        let mut buffer = Vec::with_capacity(length as usize);
+        self.device_mut()?
+            .read_into(start, length, &mut buffer, Some(progress))
+            .map_err(|e| e.to_string())?;
+        Ok(buffer)
+    }
+
+    /// Program data, erasing first and verifying afterwards.
+    pub fn program(&mut self, start: u64, data: &[u8]) -> Result<(), String> {
+        self.device_mut()?
+            .program(start, data, ProgramOptions::default(), None)
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+
+    /// Erase whole sectors covering the range.
+    pub fn erase_range(&mut self, start: u64, length: u64) -> Result<u64, String> {
+        self.device_mut()?
+            .erase_range(start, length)
+            .map_err(|e| e.to_string())
+    }
+
+    /// Platform of the connected device.
+    pub fn platform(&self) -> Option<DevicePlatform> {
+        self.active
+            .as_ref()
+            .map(|device| DevicePlatform::from(device.version().platform))
+    }
+
+    /// Capabilities of the connected device.
+    pub fn capabilities(&self) -> Option<DeviceCapabilities> {
+        self.active
+            .as_ref()
+            .map(|device| DeviceCapabilities::from_version(device.version()))
     }
 }
 
 impl Default for DeviceManager {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+fn log_scan_failure(message: &str) {
+    eprintln!("openflash: USB enumeration failed: {message}");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_scan_always_offers_the_emulator_and_labels_it() {
+        let mut manager = DeviceManager::new();
+        let devices = manager.scan_devices();
+
+        let emulated = devices
+            .iter()
+            .find(|d| d.id == "emulated")
+            .expect("the emulator is always offered");
+        assert!(emulated.emulated);
+        assert!(
+            emulated.name.contains("no hardware"),
+            "the entry must say it is not hardware: {}",
+            emulated.name
+        );
+    }
+
+    #[test]
+    fn commands_without_a_connection_are_refused() {
+        let mut manager = DeviceManager::new();
+        assert!(!manager.is_connected());
+        assert!(manager.send_command(Command::Ping, &[]).is_err());
+        assert!(manager.identify().is_err());
+        assert!(manager.read_range(0, 16).is_err());
+        assert!(manager.program(0, &[0u8; 4]).is_err());
+    }
+
+    #[test]
+    fn connecting_to_the_emulator_performs_the_handshake_and_fills_in_the_details() {
+        let mut manager = DeviceManager::new();
+        manager.scan_devices();
+        manager.connect("emulated").expect("the emulator answers");
+
+        assert!(manager.is_connected());
+        assert!(manager.is_emulated());
+        assert_eq!(manager.platform(), Some(DevicePlatform::Rp2040));
+
+        let capabilities = manager.capabilities().unwrap();
+        assert!(capabilities.spi_nor);
+        assert!(!capabilities.emmc);
+
+        let listed = manager.list_devices();
+        let entry = listed.iter().find(|d| d.id == "emulated").unwrap();
+        assert!(entry.connected);
+        assert_eq!(
+            entry.protocol_version,
+            Some(openflash_core::protocol::PROTOCOL_VERSION)
+        );
+    }
+
+    #[test]
+    fn identify_names_the_emulated_chip() {
+        let mut manager = DeviceManager::new();
+        manager.scan_devices();
+        manager.connect("emulated").unwrap();
+
+        let chip = manager.identify().unwrap();
+        assert_eq!(chip.model, "W25Q16JV");
+        assert_eq!(chip.size_mb, 2);
+        assert_eq!(chip.jedec_id, Some(vec![0xEF, 0x40, 0x15]));
+        assert!(chip.exact_match);
+    }
+
+    /// The path that was broken in the old implementation: reading a page
+    /// returned data that was offset by 64 bytes and left the link out of step.
+    #[test]
+    fn a_program_then_read_round_trip_returns_the_same_bytes() {
+        let mut manager = DeviceManager::new();
+        manager.scan_devices();
+        manager.connect("emulated").unwrap();
+
+        let payload: Vec<u8> = (0..3000u32).map(|i| (i % 251) as u8).collect();
+        manager.program(0, &payload).unwrap();
+        assert_eq!(
+            manager.read_range(0, payload.len() as u64).unwrap(),
+            payload
+        );
+    }
+
+    #[test]
+    fn progress_is_reported_from_zero_to_the_total() {
+        let mut manager = DeviceManager::new();
+        manager.scan_devices();
+        manager.connect("emulated").unwrap();
+
+        let mut seen = Vec::new();
+        let data = manager
+            .read_range_with_progress(0, 10_000, &mut |done, total| seen.push((done, total)))
+            .unwrap();
+
+        assert_eq!(data.len(), 10_000);
+        assert_eq!(seen.first(), Some(&(0, 10_000)));
+        assert_eq!(seen.last(), Some(&(10_000, 10_000)));
+    }
+
+    #[test]
+    fn an_interface_the_device_lacks_is_refused() {
+        let mut manager = DeviceManager::new();
+        manager.scan_devices();
+        manager.connect("emulated").unwrap();
+
+        assert!(manager.set_interface(FlashInterface::Emmc).is_err());
+        assert_eq!(manager.get_interface(), FlashInterface::SpiNor);
+
+        manager.set_interface(FlashInterface::SpiNor).unwrap();
+        assert_eq!(manager.get_interface(), FlashInterface::SpiNor);
+    }
+
+    #[test]
+    fn erase_blanks_the_range() {
+        let mut manager = DeviceManager::new();
+        manager.scan_devices();
+        manager.connect("emulated").unwrap();
+
+        manager.program(0, &[0x00; 4096]).unwrap();
+        assert_eq!(manager.erase_range(0, 4096).unwrap(), 1);
+        assert!(manager
+            .read_range(0, 4096)
+            .unwrap()
+            .iter()
+            .all(|&b| b == 0xFF));
+    }
+
+    #[test]
+    fn disconnecting_clears_the_connection() {
+        let mut manager = DeviceManager::new();
+        manager.scan_devices();
+        manager.connect("emulated").unwrap();
+        manager.disconnect();
+
+        assert!(!manager.is_connected());
+        assert!(manager.send_command(Command::Ping, &[]).is_err());
+        assert!(!manager.list_devices().iter().any(|device| device.connected));
     }
 }

@@ -200,7 +200,11 @@ impl fmt::Display for TransportKind {
 }
 
 /// A link to a device that exchanges protocol frames.
-pub trait Transport {
+///
+/// `Send` is required so a connection can be owned by application state and
+/// moved to a worker thread — the GUI keeps one in Tauri's managed state, and a
+/// long dump has to run off the UI thread.
+pub trait Transport: Send {
     /// How this device is reached, for display and logging.
     fn kind(&self) -> TransportKind;
 

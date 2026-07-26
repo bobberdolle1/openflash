@@ -291,16 +291,80 @@ mod tests {
         assert_eq!(result.trailing_bytes, 200);
     }
 
+    /// 4-bit BCH over a 512-byte page needs seven spare bytes, so the dump has
+    /// to be built with a seven-byte spare area to be readable at all.
+    fn bch_raw_dump(pages: &[Vec<u8>], t: u8) -> Vec<u8> {
+        let mut raw = Vec::new();
+        for page in pages {
+            let (_, ecc) = encode_with_ecc(page, &EccAlgorithm::Bch { t }).unwrap();
+            raw.extend_from_slice(page);
+            raw.extend_from_slice(&ecc);
+        }
+        raw
+    }
+
     #[test]
-    fn bch_is_reported_per_page_rather_than_silently_ignored() {
+    fn bch_repairs_several_bit_errors_per_page() {
+        let pages = vec![page(7), page(8)];
+        let mut raw = bch_raw_dump(&pages, 4);
+        let stride = 512 + 7;
+
+        // Three flips in the first page, one in the second — within what a
+        // 4-bit code can repair, and more than Hamming could.
+        raw[10] ^= 0x01;
+        raw[200] ^= 0x40;
+        raw[500] ^= 0x08;
+        raw[stride + 42] ^= 0x20;
+
+        let mut config = config(EccAlgorithm::Bch { t: 4 });
+        config.oob_size = 7;
+
+        let result = process_dump_with_ecc(&raw, &config).unwrap();
+
+        assert_eq!(result.pages, 2);
+        assert_eq!(result.corrected_bits, 4);
+        assert!(result.is_clean(), "{:?}", result.uncorrectable);
+        assert_eq!(result.data, [pages[0].clone(), pages[1].clone()].concat());
+    }
+
+    /// More flips than `t` must be named, not folded into the correction count.
+    #[test]
+    fn a_page_beyond_bchs_reach_is_named() {
+        let pages = vec![page(9)];
+        let mut raw = bch_raw_dump(&pages, 4);
+        for offset in [3usize, 60, 130, 240, 333, 480] {
+            raw[offset] ^= 0x11; // two bits each, so twelve flips in one page
+        }
+
+        let mut config = config(EccAlgorithm::Bch { t: 4 });
+        config.oob_size = 7;
+
+        let result = process_dump_with_ecc(&raw, &config).unwrap();
+
+        assert_eq!(result.uncorrectable.len(), 1);
+        assert_eq!(result.uncorrectable[0].page, 0);
+        assert!(
+            result.uncorrectable[0].reason.contains("more bit errors"),
+            "{}",
+            result.uncorrectable[0].reason
+        );
+    }
+
+    /// A spare area too small for the configured `t` is a geometry mistake, and
+    /// the page has to be reported rather than passed off as verified.
+    #[test]
+    fn bch_with_too_small_a_spare_area_is_reported_per_page() {
         let pages = vec![page(7)];
+        // Four spare bytes, which is Hamming's size; BCH-4 needs seven.
         let raw = raw_dump(&pages);
 
         let result = process_dump_with_ecc(&raw, &config(EccAlgorithm::Bch { t: 4 })).unwrap();
 
         assert_eq!(result.uncorrectable.len(), 1);
         assert!(
-            result.uncorrectable[0].reason.contains("BCH"),
+            result.uncorrectable[0]
+                .reason
+                .contains("missing or malformed"),
             "{}",
             result.uncorrectable[0].reason
         );

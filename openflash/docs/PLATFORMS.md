@@ -23,7 +23,7 @@ update the row.
 | STM32F103 (Blue Pill) | no | no — legacy NAND opcodes, unframed v1 | none verified | none |
 | STM32F4 (Black Pill) | no | no — legacy NAND opcodes, unframed v1 | none verified | none |
 | ESP32 | no | no — its own opcode base | none verified | none |
-| Teensy 4.0 / 4.1 | no | almost — `GetVersion` differs | none verified | none |
+| Teensy 4.0 / 4.1 | no | table almost matches, but is unused | none verified | none |
 | RP2350 (Pico 2) | no | no table at all | none — stubs | none |
 | Arduino GIGA R1 | no | no table at all | none — stubs | none |
 
@@ -117,11 +117,30 @@ NAND as stubs. Its opcode table is its own: `Ping` is `0x00` rather than `0x01`,
 so a current host cannot even ping it, and SPI NOR sits at `0x70` rather than
 `0x60`. Does not build (`esp-hal` 0.22 with no target configuration).
 
-### Teensy 4.0 / 4.1 — closest to compatible
+### Teensy 4.0 / 4.1 — the opcode table is close, the firmware is not
 
-~900 lines. Its opcode table matches the shared one except `GetVersion`, which it
-puts at `0x03`. Migrating it is the smallest job of the microcontroller
-firmwares. Does not build: no target configuration.
+~900 lines. Its `Command` enum matches the shared table except `GetVersion`,
+which it puts at `0x03`. An earlier version of this file concluded from that
+alone that migrating it was the smallest job of the microcontroller firmwares.
+That was wrong, and reading the rest of the crate is what shows it:
+
+- `usb.rs` is a stub. `poll_command` returns `None` unconditionally and
+  `send_response` discards its argument, both behind an `initialized` flag that
+  nothing but `init()` touches. There is no USB implementation, so the firmware
+  could never receive a command even if it built.
+- the dispatcher in `main.rs` does not use that `Command` enum at all. It matches
+  raw bytes on a different numbering — `0x02` is a version string, `0x03` a
+  platform name, `0x04` a USB speed report — none of which is what the shared
+  table assigns. The enum is dead code.
+- that match also has an unreachable arm: `0x00 | 0x01` is handled first, then
+  `0x01` again for "get device info", which can never run.
+- replies are unframed, so protocol revision 2 is not spoken regardless.
+
+So the work is a USB High Speed stack, a real dispatcher and framing — not a
+one-line opcode change. Does not build either: no target configuration.
+
+The `thumbv7em-none-eabihf` target it needs does install and work, so the
+toolchain is not the obstacle.
 
 ### RP2350 (Pico 2) — stubs
 
@@ -146,11 +165,36 @@ Where each flash interface stands across the project, host side and device side.
 | eMMC | chip database, CSD/EXT_CSD parsing | none working |
 | UFS | descriptor parsing, SCSI CDB building | none working |
 
-ECC: the Hamming codec corrects single-bit errors and detects double-bit ones,
-checked at every bit position of a sector. BCH refuses to run — it repaired none
-of 4096 injected single-bit errors and mis-corrected ten of them, which is worse
-than no ECC — so it returns `NotImplemented` until it is fixed and checked
-against published vectors. See `core/src/ecc.rs`.
+ECC: both codecs work. Hamming corrects single-bit errors and detects double-bit
+ones, checked at every bit position of a sector. BCH corrects up to `t` bits over
+a 512- or 1024-byte sector, in the 4-, 8-, 16- and 24-bit configurations NAND
+uses.
+
+BCH previously refused to run, because it repaired none of 4096 injected
+single-bit errors and mis-corrected ten. The cause was the generator polynomial:
+it was built as ∏(x − α^i) with coefficients in GF(2^13), but a binary BCH code
+needs a generator over GF(2), the LCM of the minimal polynomials of the roots.
+What is checked now:
+
+- every primitive polynomial really is primitive — α is walked through the whole
+  multiplicative group, and the log table is checked for gaps
+- α^1 … α^2t are roots of the generator, evaluated directly
+- the parity length is exactly *m·t*, giving 7, 13, 26 and 42 ECC bytes for the
+  four configurations, which are the sizes NAND datasheets quote
+- every one of the 4148 single-bit errors in a 512-byte codeword — data *and*
+  parity — is repaired
+- error patterns of weight 2…t are repaired, from a fixed seed
+- patterns beyond `t` are detected, and never mis-corrected: after locating the
+  bits the syndromes are recomputed and must vanish, otherwise the sector is
+  reported uncorrectable and the caller's buffer is left untouched
+
+One limit worth stating plainly: this codec is self-consistent, and it is not
+automatically byte-compatible with any particular flash controller. A hardware
+NAND controller chooses its own bit order, its own mapping of sectors into the
+spare area, and sometimes scrambles the data, so ECC bytes taken from a dump made
+by such a controller will not generally verify here. Matching a specific
+controller is a separate job from having a correct BCH implementation. See
+`core/src/ecc.rs`.
 
 The host's chip databases and dump analysis cover far more than the device layer
 can reach. That asymmetry is real: parsing an existing dump works for all five

@@ -174,8 +174,11 @@ reintroduces its own.
 
 The most valuable contributions right now, in order:
 
-1. **Get one microcontroller firmware building and talking.** The Teensy 4 is
-   closest: its opcode table already matches except `GetVersion`.
+1. **Get one microcontroller firmware building and talking.** All seven need a
+   USB stack, a framed dispatcher and target configuration; the Teensy 4's
+   opcode table is the closest to correct, but its USB layer is a stub that
+   never receives anything, so it is not the small job it looks like.
+   `docs/PLATFORMS.md` says what each one is missing.
 2. **Hardware-in-the-loop testing.** A self-hosted runner with a Pico and a
    W25Q part would let CI prove a real read, which is the only thing that
    really protects against regressions here.
@@ -183,8 +186,9 @@ The most valuable contributions right now, in order:
 4. **Parallel NAND on an SBC agent.** The scaffold is there; it needs the
    address cycles. Note that Linux GPIO timing makes this hard — the
    microcontrollers are the better home for it.
-5. **BCH ECC.** Currently refuses to run because it mis-corrected data. Needs a
-   correct implementation checked against published test vectors.
+5. **Controller-specific BCH layouts.** The BCH codec itself is correct now, but
+   it uses its own bit order. Reading the ECC a particular NAND controller wrote
+   means matching that controller's layout and descrambling.
 
 `CONTRIBUTING.md` has the process. Please do not add a platform or a feature to
 the documentation before the code behind it works — the project has been through
@@ -268,13 +272,17 @@ of verify --file firmware.bin
 
 ### Как помочь
 
-1. **Поднять хотя бы одну прошивку для микроконтроллера.** Ближе всех Teensy 4 —
-   его таблица опкодов уже совпадает, кроме `GetVersion`.
+1. **Поднять хотя бы одну прошивку для микроконтроллера.** Всем семи нужны USB-стек,
+   диспетчер с фреймингом и настройка целевой платформы. У Teensy 4 таблица
+   опкодов ближе всех к правильной, но его USB-слой — заглушка, которая никогда
+   ничего не принимает, так что это не такая мелкая задача, как кажется.
+   Что именно отсутствует у каждой платы — в `docs/PLATFORMS.md`.
 2. **Тесты на реальном железе в CI** (self-hosted runner с Pico и W25Q).
 3. **Новые чипы в базу** — запись плюс тест.
 4. **Parallel NAND в агенте для SBC** — каркас есть, нужны адресные циклы.
-5. **BCH ECC** — сейчас отказывается работать, потому что портил данные. Нужна
-   корректная реализация, проверенная по опубликованным тестовым векторам.
+5. **Раскладки BCH конкретных контроллеров.** Сам кодек BCH теперь корректен, но
+   использует свой порядок бит. Чтобы читать ECC, записанный конкретным
+   NAND-контроллером, нужно повторить его раскладку и снять скремблирование.
 
 Пожалуйста, не добавляйте платформу или функцию в документацию раньше, чем
 заработает код: проект уже проходил через это, и разбор последствий занял

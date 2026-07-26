@@ -127,7 +127,7 @@ pub use scripting::{
     AnalysisOptions, AnomalyInfo, BatchJob, BatchJobConfig, BatchJobResult, BatchJobStatus,
     BatchJobType, BatchProcessor, ChipDetectionResult, CiArtifact, CiArtifactType, CiJobConfig,
     CiJobResult, CiOperation, CiOperationResult, CliCommand, CliConfig, CliOutputFormat,
-    ConnectionConfig, DeviceHandle, DeviceInfo, DumpResult, FilesystemInfo, KeyCandidate,
+    ConnectionConfig, ConnectionTarget, DeviceInfo, DumpResult, FilesystemInfo, KeyCandidate,
     OpenFlash, PatternInfo, PluginContext, PluginHook, PluginManager, PluginMetadata, PluginResult,
     ReadOptions, ReadStats, RecoverySuggestion, ReportFormat, ReportOptions, ScriptAnalysisResult,
     ScriptError, ScriptResult, WriteOptions,

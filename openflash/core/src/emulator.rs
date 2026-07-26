@@ -23,6 +23,7 @@
 //! drives — a self-check of the whole host stack that needs no hardware, and is
 //! labelled as emulated everywhere it appears.
 
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use openflash_protocol::frame::Frame;
@@ -75,26 +76,29 @@ pub struct EmulatedDevice {
     write_protected: bool,
     interface: FlashInterface,
     stats: EmulatorStats,
+    backing_file: Option<PathBuf>,
+}
+
+/// Capacity byte of a JEDEC id for a chip of `size` bytes.
+///
+/// The third id byte is the base-2 logarithm of the size, so it has to be
+/// derived from the array rather than chosen independently: an id that claims a
+/// different capacity than the emulated array would make the host compute
+/// addresses the emulated chip rejects, and the emulator would be testing the
+/// host against a chip that could not exist.
+fn capacity_byte_for(size: usize) -> u8 {
+    debug_assert!(size.is_power_of_two(), "size must be a power of two");
+    size.trailing_zeros() as u8
 }
 
 impl EmulatedDevice {
     /// Create an erased device of `size` bytes.
     ///
-    /// `size` must be a multiple of [`SECTOR_SIZE`].
+    /// `size` must be a power of two and at least [`SECTOR_SIZE`]. The JEDEC id's
+    /// capacity byte is derived from it, so the id the host reads always agrees
+    /// with how much memory there actually is.
     pub fn new(model: &str, jedec_id: [u8; 3], size: usize) -> Self {
-        assert!(
-            size % SECTOR_SIZE == 0 && size > 0,
-            "emulated chip size {size} must be a non-zero multiple of {SECTOR_SIZE}"
-        );
-        Self {
-            image: vec![0xFF; size],
-            jedec_id,
-            model: model.to_string(),
-            write_enabled: false,
-            write_protected: false,
-            interface: FlashInterface::SpiNor,
-            stats: EmulatorStats::default(),
-        }
+        Self::with_image(model, jedec_id, vec![0xFF; size])
     }
 
     /// A 2 MiB Winbond W25Q16JV, the part most commonly wired up for testing.
@@ -105,10 +109,14 @@ impl EmulatedDevice {
     /// Create a device preloaded with `image`.
     pub fn with_image(model: &str, jedec_id: [u8; 3], image: Vec<u8>) -> Self {
         assert!(
-            image.len() % SECTOR_SIZE == 0 && !image.is_empty(),
-            "emulated image length {} must be a non-zero multiple of {SECTOR_SIZE}",
+            image.len() >= SECTOR_SIZE && image.len().is_power_of_two(),
+            "emulated image length {} must be a power of two of at least {SECTOR_SIZE} bytes",
             image.len()
         );
+
+        let mut jedec_id = jedec_id;
+        jedec_id[2] = capacity_byte_for(image.len());
+
         Self {
             image,
             jedec_id,
@@ -117,6 +125,52 @@ impl EmulatedDevice {
             write_protected: false,
             interface: FlashInterface::SpiNor,
             stats: EmulatorStats::default(),
+            backing_file: None,
+        }
+    }
+
+    /// Create a device whose contents live in a file.
+    ///
+    /// The image is loaded if the file exists, and created blank at `size` bytes
+    /// if it does not. Changes are written back when the device is dropped, so
+    /// the emulated chip keeps its contents between separate runs of the CLI —
+    /// without that, a `write` followed by a `read` in two processes would talk
+    /// to two different blank chips.
+    pub fn with_backing_file(
+        model: &str,
+        jedec_id: [u8; 3],
+        path: &Path,
+        size: usize,
+    ) -> std::io::Result<Self> {
+        let image = if path.exists() {
+            let loaded = std::fs::read(path)?;
+            if loaded.len() < SECTOR_SIZE || !loaded.len().is_power_of_two() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!(
+                        "{} is {} bytes; an emulated image must be a power of two of at \
+                         least {SECTOR_SIZE} bytes",
+                        path.display(),
+                        loaded.len()
+                    ),
+                ));
+            }
+            loaded
+        } else {
+            vec![0xFF; size]
+        };
+
+        let mut device = Self::with_image(model, jedec_id, image);
+        device.backing_file = Some(path.to_path_buf());
+        device.persist()?;
+        Ok(device)
+    }
+
+    /// Write the current contents to the backing file, if there is one.
+    pub fn persist(&self) -> std::io::Result<()> {
+        match &self.backing_file {
+            Some(path) => std::fs::write(path, &self.image),
+            None => Ok(()),
         }
     }
 
@@ -338,6 +392,22 @@ impl EmulatedDevice {
         self.stats.erases += 1;
         self.write_enabled = false;
         (Status::Ok, Vec::new())
+    }
+}
+
+impl Drop for EmulatedDevice {
+    fn drop(&mut self) {
+        // Reported rather than ignored: silently losing the emulated image would
+        // make a later read look like the write never happened.
+        if let Err(error) = self.persist() {
+            eprintln!(
+                "warning: cannot save the emulated chip image to {}: {error}",
+                self.backing_file
+                    .as_ref()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_default()
+            );
+        }
     }
 }
 

@@ -1,240 +1,13 @@
-//! CLI command implementations
+//! CLI commands that work on files already on disk.
+//!
+//! Commands that talk to a device live in [`crate::device_commands`].
 
-use crate::{create_progress_bar, format_size, parse_address, Cli};
+use crate::{format_size, Cli};
 use colored::Colorize;
 use openflash_core::scripting::*;
 use std::path::PathBuf;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
-
-/// Scan for connected devices
-pub fn scan(cli: &Cli) -> Result<()> {
-    if !cli.quiet {
-        println!("{}", "Scanning for OpenFlash devices...".yellow());
-    }
-
-    // Mock implementation - would scan USB/serial ports
-    let devices = vec![
-        ("RP2040", "/dev/ttyACM0", "1.8.0"),
-        ("ESP32", "/dev/ttyUSB0", "1.8.0"),
-    ];
-
-    match cli.format.as_str() {
-        "json" => {
-            let json: Vec<_> = devices
-                .iter()
-                .map(|(p, port, v)| serde_json::json!({"platform": p, "port": port, "version": v}))
-                .collect();
-            println!("{}", serde_json::to_string_pretty(&json)?);
-        }
-        _ => {
-            println!("\n{}", "Found devices:".green().bold());
-            for (platform, port, version) in &devices {
-                println!(
-                    "  {} {} @ {} (fw {})",
-                    "●".green(),
-                    platform.cyan(),
-                    port.white(),
-                    version.dimmed()
-                );
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Detect connected chip
-pub fn detect(cli: &Cli) -> Result<()> {
-    let mut of = OpenFlash::new();
-    of.connect_with_config(ConnectionConfig {
-        port: cli.port.clone(),
-        ..Default::default()
-    })?;
-
-    let chip = of.detect_chip()?;
-
-    match cli.format.as_str() {
-        "json" => println!("{}", serde_json::to_string_pretty(&chip)?),
-        _ => {
-            println!("\n{}", "Detected chip:".green().bold());
-            println!("  Manufacturer: {}", chip.manufacturer.cyan());
-            println!("  Model:        {}", chip.model.cyan());
-            println!("  Capacity:     {}", format_size(chip.capacity).yellow());
-            println!("  Page size:    {} bytes", chip.page_size);
-            println!("  Block size:   {}", format_size(chip.block_size as u64));
-            println!("  OOB size:     {} bytes", chip.oob_size);
-            println!("  Interface:    {}", chip.interface);
-            println!(
-                "  ID:           {}",
-                chip.id_bytes
-                    .iter()
-                    .map(|b| format!("{:02X}", b))
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            );
-        }
-    }
-    Ok(())
-}
-
-/// Read/dump chip
-pub fn read(
-    cli: &Cli,
-    output: PathBuf,
-    start: &str,
-    length: Option<&str>,
-    oob: bool,
-    skip_bad: bool,
-) -> Result<()> {
-    let start_addr = parse_address(start)?;
-    let length_val = length.map(|l| parse_address(l)).transpose()?;
-
-    let mut of = OpenFlash::new();
-    of.connect_with_config(ConnectionConfig {
-        port: cli.port.clone(),
-        ..Default::default()
-    })?;
-
-    let chip = of.detect_chip()?;
-    let total = length_val.unwrap_or(chip.capacity);
-
-    if !cli.quiet {
-        println!(
-            "{} {} to {}",
-            "Reading".green(),
-            format_size(total).yellow(),
-            output.display().to_string().cyan()
-        );
-    }
-
-    let pb = if !cli.quiet {
-        Some(create_progress_bar(total, "Reading..."))
-    } else {
-        None
-    };
-
-    let result = of.read_with_options(ReadOptions {
-        start_address: start_addr,
-        length: length_val,
-        include_oob: oob,
-        skip_bad_blocks: skip_bad,
-        ..Default::default()
-    })?;
-
-    if let Some(pb) = pb {
-        pb.finish_with_message("Done!");
-    }
-
-    std::fs::write(&output, &result.data)?;
-    if let Some(oob_data) = &result.oob_data {
-        let oob_path = output.with_extension("oob");
-        std::fs::write(&oob_path, oob_data)?;
-    }
-
-    if !cli.quiet {
-        println!("\n{}", "Read complete:".green().bold());
-        println!("  Bytes:    {}", format_size(result.stats.bytes_read));
-        println!("  Pages:    {}", result.stats.pages_read);
-        println!("  Duration: {} ms", result.stats.duration_ms);
-        println!("  Speed:    {}/s", format_size(result.stats.speed_bps));
-        if !result.bad_blocks.is_empty() {
-            println!("  Bad blocks: {:?}", result.bad_blocks);
-        }
-    }
-    Ok(())
-}
-
-/// Write/program chip
-pub fn write(
-    cli: &Cli,
-    input: PathBuf,
-    start: &str,
-    verify: bool,
-    erase: bool,
-    skip_bad: bool,
-) -> Result<()> {
-    let start_addr = parse_address(start)?;
-    let data = std::fs::read(&input)?;
-
-    if !cli.quiet {
-        println!(
-            "{} {} from {}",
-            "Writing".green(),
-            format_size(data.len() as u64).yellow(),
-            input.display().to_string().cyan()
-        );
-        if erase {
-            println!("  Erase before write: {}", "yes".green());
-        }
-        if verify {
-            println!("  Verify after write: {}", "yes".green());
-        }
-    }
-
-    let pb = if !cli.quiet {
-        Some(create_progress_bar(data.len() as u64, "Writing..."))
-    } else {
-        None
-    };
-
-    // Mock write operation
-    std::thread::sleep(std::time::Duration::from_millis(100));
-
-    if let Some(pb) = pb {
-        pb.finish_with_message("Done!");
-    }
-
-    if !cli.quiet {
-        println!("\n{}", "Write complete!".green().bold());
-    }
-    Ok(())
-}
-
-/// Erase chip
-pub fn erase(cli: &Cli, start: Option<&str>, length: Option<&str>, force: bool) -> Result<()> {
-    if !force && !cli.quiet {
-        println!("{}", "WARNING: This will erase flash data!".red().bold());
-        println!("Use --force to confirm.");
-        return Ok(());
-    }
-
-    let start_addr = start.map(|s| parse_address(s)).transpose()?.unwrap_or(0);
-
-    if !cli.quiet {
-        println!("{} chip...", "Erasing".red());
-    }
-
-    // Mock erase
-    std::thread::sleep(std::time::Duration::from_millis(100));
-
-    if !cli.quiet {
-        println!("{}", "Erase complete!".green().bold());
-    }
-    Ok(())
-}
-
-/// Verify chip contents
-pub fn verify(cli: &Cli, file: PathBuf, start: &str) -> Result<()> {
-    let data = std::fs::read(&file)?;
-
-    if !cli.quiet {
-        println!(
-            "{} against {}",
-            "Verifying".yellow(),
-            file.display().to_string().cyan()
-        );
-    }
-
-    // Mock verify
-    let matches = true;
-
-    if matches {
-        println!("{}", "Verification PASSED!".green().bold());
-    } else {
-        println!("{}", "Verification FAILED!".red().bold());
-    }
-    Ok(())
-}
 
 /// AI analysis
 pub fn analyze(
@@ -363,78 +136,93 @@ pub fn compare(cli: &Cli, file1: PathBuf, file2: PathBuf, output: Option<PathBuf
         );
     }
 
-    let mut diffs = 0;
-    let min_len = data1.len().min(data2.len());
-    for i in 0..min_len {
-        if data1[i] != data2[i] {
-            diffs += 1;
+    let overlap = data1.len().min(data2.len());
+    let mut differing_offsets = Vec::new();
+    for index in 0..overlap {
+        if data1[index] != data2[index] {
+            differing_offsets.push(index);
         }
     }
-    diffs += (data1.len() as i64 - data2.len() as i64).unsigned_abs() as usize;
+    let length_difference = data1.len().abs_diff(data2.len());
+    let diffs = differing_offsets.len() + length_difference;
 
-    let similarity = 1.0 - (diffs as f64 / data1.len().max(data2.len()) as f64);
+    let longest = data1.len().max(data2.len());
+    let similarity = if longest == 0 {
+        1.0
+    } else {
+        1.0 - (diffs as f64 / longest as f64)
+    };
 
-    println!("\n{}", "Comparison Results:".green().bold());
+    let mut report = String::new();
+    report.push_str("# OpenFlash dump comparison\n\n");
+    report.push_str(&format!(
+        "- File 1: {} ({} bytes)\n",
+        file1.display(),
+        data1.len()
+    ));
+    report.push_str(&format!(
+        "- File 2: {} ({} bytes)\n",
+        file2.display(),
+        data2.len()
+    ));
+    report.push_str(&format!(
+        "- Differing bytes in the overlap: {}\n",
+        differing_offsets.len()
+    ));
+    report.push_str(&format!("- Length difference: {length_difference} bytes\n"));
+    report.push_str(&format!("- Similarity: {:.4}%\n", similarity * 100.0));
+    if let Some(first) = differing_offsets.first() {
+        report.push_str(&format!(
+            "- First difference at {first:#x}: {:#04x} vs {:#04x}\n",
+            data1[*first], data2[*first]
+        ));
+        report.push_str("\n## Differing offsets (first 1000)\n\n");
+        for offset in differing_offsets.iter().take(1000) {
+            report.push_str(&format!(
+                "{offset:#010x}  {:#04x} -> {:#04x}\n",
+                data1[*offset], data2[*offset]
+            ));
+        }
+        if differing_offsets.len() > 1000 {
+            report.push_str(&format!(
+                "\n… and {} more\n",
+                differing_offsets.len() - 1000
+            ));
+        }
+    }
+
+    if let Some(path) = &output {
+        std::fs::write(path, &report)?;
+    }
+
+    if cli.format == "json" {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "file1": { "path": file1.display().to_string(), "size": data1.len() },
+                "file2": { "path": file2.display().to_string(), "size": data2.len() },
+                "differing_bytes": differing_offsets.len(),
+                "length_difference": length_difference,
+                "similarity": similarity,
+                "first_difference": differing_offsets.first(),
+            }))?
+        );
+        return Ok(());
+    }
+
+    println!("\n{}", "Comparison results:".green().bold());
     println!("  File 1 size: {}", format_size(data1.len() as u64));
     println!("  File 2 size: {}", format_size(data2.len() as u64));
-    println!("  Differences: {} bytes", diffs);
+    println!("  Differences: {diffs} bytes");
     println!("  Similarity:  {:.2}%", similarity * 100.0);
-    Ok(())
-}
-
-/// Clone chip-to-chip
-pub fn clone_chip(cli: &Cli, mode: &str, verify: bool) -> Result<()> {
-    if !cli.quiet {
-        println!(
-            "{} (mode: {})",
-            "Starting chip-to-chip clone".cyan(),
-            mode.yellow()
-        );
-        println!(
-            "  Verify: {}",
-            if verify { "yes".green() } else { "no".red() }
-        );
+    match differing_offsets.first() {
+        Some(first) => println!("  First diff:  {first:#x}"),
+        None if length_difference == 0 => println!("  {}", "Files are identical.".green()),
+        None => println!("  Common prefix is identical; the files differ in length only."),
     }
-    println!(
-        "{}",
-        "Clone operation requires two devices connected.".yellow()
-    );
-    Ok(())
-}
-
-/// Run batch jobs
-pub fn batch(cli: &Cli, file: PathBuf, stop_on_error: bool) -> Result<()> {
-    if !cli.quiet {
-        println!(
-            "{} {}",
-            "Running batch file:".cyan(),
-            file.display().to_string().yellow()
-        );
+    if let Some(path) = &output {
+        println!("  Report:      {}", path.display().to_string().cyan());
     }
-
-    // Mock batch execution
-    let jobs = vec!["Read chip", "Analyze dump", "Export report"];
-    for (i, job) in jobs.iter().enumerate() {
-        println!("  [{}/{}] {} {}", i + 1, jobs.len(), "✓".green(), job);
-    }
-
-    println!("\n{}", "Batch complete!".green().bold());
-    Ok(())
-}
-
-/// Run script
-pub fn script(cli: &Cli, file: PathBuf, args: Vec<String>) -> Result<()> {
-    if !cli.quiet {
-        println!(
-            "{} {}",
-            "Running script:".cyan(),
-            file.display().to_string().yellow()
-        );
-        if !args.is_empty() {
-            println!("  Args: {:?}", args);
-        }
-    }
-    println!("{}", "Script execution requires Python runtime.".yellow());
     Ok(())
 }
 
@@ -446,7 +234,7 @@ pub fn list_chips(
     search: Option<String>,
 ) -> Result<()> {
     // Mock chip database
-    let chips = vec![
+    let chips = [
         ("Samsung", "K9F1G08U0E", "parallel_nand", "128MB"),
         ("Samsung", "K9F2G08U0C", "parallel_nand", "256MB"),
         ("GigaDevice", "GD5F1GQ4U", "spi_nand", "128MB"),
@@ -495,38 +283,6 @@ pub fn list_chips(
                 );
             }
         }
-    }
-    Ok(())
-}
-
-/// Show device info
-pub fn info(cli: &Cli) -> Result<()> {
-    let mut of = OpenFlash::new();
-    of.connect_with_config(ConnectionConfig {
-        port: cli.port.clone(),
-        ..Default::default()
-    })?;
-
-    let info = of.device_info().ok_or("Not connected")?;
-
-    match cli.format.as_str() {
-        "json" => println!("{}", serde_json::to_string_pretty(&info)?),
-        _ => {
-            println!("\n{}", "Device Information:".green().bold());
-            println!("  Port:       {}", info.port.cyan());
-            println!("  Platform:   {}", info.platform.yellow());
-            println!("  Firmware:   {}", info.firmware_version);
-            println!("  Serial:     {}", info.serial_number.dimmed());
-            println!("  Interfaces: {}", info.interfaces.join(", "));
-        }
-    }
-    Ok(())
-}
-
-/// Set interface
-pub fn set_interface(cli: &Cli, interface: &str) -> Result<()> {
-    if !cli.quiet {
-        println!("Setting interface to: {}", interface.cyan());
     }
     Ok(())
 }
@@ -949,602 +705,11 @@ pub fn signatures_list(cli: &Cli) -> Result<()> {
     Ok(())
 }
 
-// ============================================================================
-// v2.0 - Multi-device & Enterprise Commands
-// ============================================================================
-
-use openflash_core::server::*;
-
-/// Start server mode
-pub fn server_start(cli: &Cli, host: &str, port: u16, config_file: Option<PathBuf>) -> Result<()> {
-    let config = if let Some(path) = config_file {
-        let content = std::fs::read_to_string(&path)?;
-        serde_json::from_str(&content)?
-    } else {
-        ServerConfig {
-            rest: RestApiConfig {
-                host: host.to_string(),
-                port,
-                ..Default::default()
-            },
-            ..Default::default()
-        }
-    };
-
-    if !cli.quiet {
-        println!("{}", "Starting OpenFlash Server v2.0".cyan().bold());
-        println!(
-            "  REST API:   http://{}:{}{}",
-            config.rest.host, config.rest.port, config.rest.prefix
-        );
-        if config.websocket.enabled {
-            println!(
-                "  WebSocket:  ws://{}:{}{}",
-                config.rest.host, config.rest.port, config.websocket.path
-            );
-        }
-        if config.grpc.enabled {
-            println!("  gRPC:       {}:{}", config.grpc.host, config.grpc.port);
-        }
-        if config.metrics_enabled {
-            println!(
-                "  Metrics:    http://{}:{}/metrics",
-                config.rest.host, config.metrics_port
-            );
-        }
-        println!("\n{}", "Press Ctrl+C to stop the server.".dimmed());
-    }
-
-    // In real implementation, this would start the actual server
-    // For now, just show the configuration
-    println!("\n{}", "Server configuration:".green());
-    println!("  Max devices:    {}", config.max_devices);
-    println!("  Max queue size: {}", config.max_queue_size);
-    println!("  Job timeout:    {} seconds", config.default_job_timeout);
-
-    Ok(())
-}
-
-/// Stop server mode
-pub fn server_stop(cli: &Cli) -> Result<()> {
-    if !cli.quiet {
-        println!("{}", "Stopping OpenFlash Server...".yellow());
-    }
-    println!("{}", "Server stopped.".green());
-    Ok(())
-}
-
-/// Get server status
-pub fn server_status(cli: &Cli, server_url: Option<&str>) -> Result<()> {
-    let url = server_url.unwrap_or("http://localhost:8080");
-
-    if !cli.quiet {
-        println!("{} {}...", "Checking server status at".cyan(), url.yellow());
-    }
-
-    // Mock server info
-    let info = ServerInfo {
-        name: "OpenFlash Server".to_string(),
-        version: "2.0.0".to_string(),
-        uptime_ms: 3600000,
-        pool_stats: PoolStats {
-            total_devices: 4,
-            available_devices: 2,
-            busy_devices: 2,
-            offline_devices: 0,
-            error_devices: 0,
-            total_jobs_completed: 150,
-            total_bytes_processed: 1024 * 1024 * 1024 * 10,
-        },
-        queue_stats: QueueStats {
-            pending_count: 5,
-            running_count: 2,
-            completed_count: 145,
-            failed_count: 3,
-            cancelled_count: 0,
-        },
-    };
-
-    match cli.format.as_str() {
-        "json" => println!("{}", serde_json::to_string_pretty(&info)?),
-        _ => {
-            println!("\n{}", "Server Status:".green().bold());
-            println!("  Name:    {}", info.name.cyan());
-            println!("  Version: {}", info.version);
-            println!("  Uptime:  {} hours", info.uptime_ms / 3600000);
-
-            println!("\n{}", "Device Pool:".cyan());
-            println!("  Total:     {}", info.pool_stats.total_devices);
-            println!(
-                "  Available: {}",
-                info.pool_stats.available_devices.to_string().green()
-            );
-            println!(
-                "  Busy:      {}",
-                info.pool_stats.busy_devices.to_string().yellow()
-            );
-            println!("  Offline:   {}", info.pool_stats.offline_devices);
-            println!("  Jobs done: {}", info.pool_stats.total_jobs_completed);
-            println!(
-                "  Data:      {}",
-                format_size(info.pool_stats.total_bytes_processed)
-            );
-
-            println!("\n{}", "Job Queue:".cyan());
-            println!("  Pending:   {}", info.queue_stats.pending_count);
-            println!(
-                "  Running:   {}",
-                info.queue_stats.running_count.to_string().yellow()
-            );
-            println!(
-                "  Completed: {}",
-                info.queue_stats.completed_count.to_string().green()
-            );
-            println!(
-                "  Failed:    {}",
-                info.queue_stats.failed_count.to_string().red()
-            );
-        }
-    }
-    Ok(())
-}
-
-/// List devices in pool
-pub fn device_list(cli: &Cli, server_url: Option<&str>) -> Result<()> {
-    let url = server_url.unwrap_or("http://localhost:8080");
-
-    if !cli.quiet {
-        println!("{} from {}...", "Listing devices".cyan(), url.yellow());
-    }
-
-    // Mock device list
-    let devices = vec![
-        DeviceInfo {
-            id: "dev-001".to_string(),
-            name: "Programmer 1".to_string(),
-            platform: "RP2040".to_string(),
-            status: "Available".to_string(),
-            current_job: None,
-            interfaces: vec!["parallel_nand".to_string(), "spi_nand".to_string()],
-            tags: vec!["production".to_string()],
-        },
-        DeviceInfo {
-            id: "dev-002".to_string(),
-            name: "Programmer 2".to_string(),
-            platform: "STM32F4".to_string(),
-            status: "Busy".to_string(),
-            current_job: Some(42),
-            interfaces: vec![
-                "parallel_nand".to_string(),
-                "spi_nand".to_string(),
-                "emmc".to_string(),
-            ],
-            tags: vec!["production".to_string(), "high-speed".to_string()],
-        },
-        DeviceInfo {
-            id: "dev-003".to_string(),
-            name: "ESP32 WiFi".to_string(),
-            platform: "ESP32".to_string(),
-            status: "Available".to_string(),
-            current_job: None,
-            interfaces: vec!["spi_nand".to_string(), "spi_nor".to_string()],
-            tags: vec!["wireless".to_string()],
-        },
-    ];
-
-    match cli.format.as_str() {
-        "json" => println!("{}", serde_json::to_string_pretty(&devices)?),
-        _ => {
-            println!(
-                "\n{} ({} devices)",
-                "Device Pool:".green().bold(),
-                devices.len()
-            );
-            for dev in &devices {
-                let status_color = match dev.status.as_str() {
-                    "Available" => dev.status.green(),
-                    "Busy" => dev.status.yellow(),
-                    "Offline" => dev.status.red(),
-                    _ => dev.status.white(),
-                };
-
-                println!(
-                    "\n  {} {} ({})",
-                    if dev.status == "Available" {
-                        "●".green()
-                    } else {
-                        "●".yellow()
-                    },
-                    dev.name.cyan(),
-                    dev.id.dimmed()
-                );
-                println!("     Platform:   {}", dev.platform);
-                println!("     Status:     {}", status_color);
-                if let Some(job) = dev.current_job {
-                    println!("     Current job: #{}", job);
-                }
-                println!("     Interfaces: {}", dev.interfaces.join(", "));
-                println!("     Tags:       {}", dev.tags.join(", ").dimmed());
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Add device to pool
-pub fn device_add(
-    cli: &Cli,
-    name: &str,
-    uri: &str,
-    platform: &str,
-    tags: Vec<String>,
-) -> Result<()> {
-    if !cli.quiet {
-        println!(
-            "{} device: {} ({})",
-            "Adding".green(),
-            name.cyan(),
-            uri.yellow()
-        );
-    }
-
-    let device = PoolDevice::new(
-        &format!("dev-{}", uuid_simple()),
-        name,
-        uri,
-        DevicePlatform::from_name(platform),
-    );
-
-    println!("{}", "Device added successfully!".green());
-    println!("  ID: {}", device.id.cyan());
-    println!("  Name: {}", device.name);
-    println!("  URI: {}", device.uri);
-    println!("  Platform: {:?}", device.platform);
-
-    Ok(())
-}
-
-/// Remove device from pool
-pub fn device_remove(cli: &Cli, device_id: &str) -> Result<()> {
-    if !cli.quiet {
-        println!("{} device: {}", "Removing".red(), device_id.cyan());
-    }
-    println!("{}", "Device removed.".green());
-    Ok(())
-}
-
-/// Submit job to queue
-pub fn job_submit(
-    cli: &Cli,
-    job_type: &str,
-    params: Vec<String>,
-    device_id: Option<&str>,
-    priority: Option<&str>,
-) -> Result<()> {
-    let job_type_enum = match job_type {
-        "read" => JobType::Read {
-            output_path: params
-                .get(0)
-                .cloned()
-                .unwrap_or_else(|| "dump.bin".to_string()),
-            start_address: 0,
-            length: None,
-            include_oob: false,
-        },
-        "write" => JobType::Write {
-            input_path: params
-                .get(0)
-                .cloned()
-                .unwrap_or_else(|| "firmware.bin".to_string()),
-            start_address: 0,
-            verify: true,
-        },
-        "erase" => JobType::Erase {
-            start_address: 0,
-            length: None,
-        },
-        "analyze" => JobType::Analyze {
-            input_path: params
-                .get(0)
-                .cloned()
-                .unwrap_or_else(|| "dump.bin".to_string()),
-            output_path: params
-                .get(1)
-                .cloned()
-                .unwrap_or_else(|| "report.json".to_string()),
-            deep_scan: false,
-        },
-        _ => JobType::Custom {
-            command: job_type.to_string(),
-            params: HashMap::new(),
-        },
-    };
-
-    let mut job = Job::new(&format!("{} job", job_type), job_type_enum);
-
-    if let Some(dev) = device_id {
-        job = job.with_device(dev);
-    }
-
-    if let Some(p) = priority {
-        let prio = match p {
-            "low" => JobPriority::Low,
-            "high" => JobPriority::High,
-            "critical" => JobPriority::Critical,
-            _ => JobPriority::Normal,
-        };
-        job = job.with_priority(prio);
-    }
-
-    if !cli.quiet {
-        println!(
-            "{} job: {} (type: {})",
-            "Submitting".green(),
-            job.name.cyan(),
-            job_type.yellow()
-        );
-    }
-
-    match cli.format.as_str() {
-        "json" => {
-            let response = SubmitJobResponse {
-                job_id: job.id,
-                status: "queued".to_string(),
-                message: "Job submitted successfully".to_string(),
-                estimated_wait: Some(30),
-            };
-            println!("{}", serde_json::to_string_pretty(&response)?);
-        }
-        _ => {
-            println!("{}", "Job submitted!".green().bold());
-            println!("  Job ID:         {}", job.id.to_string().cyan());
-            println!("  Status:         queued");
-            println!("  Priority:       {:?}", job.priority);
-            println!("  Estimated wait: ~30 seconds");
-        }
-    }
-    Ok(())
-}
-
-/// Get job status
-pub fn job_status(cli: &Cli, job_id: u64) -> Result<()> {
-    if !cli.quiet {
-        println!("{} job #{}...", "Checking status of".cyan(), job_id);
-    }
-
-    // Mock job status
-    let status = JobStatusResponse {
-        job_id,
-        name: "Read job".to_string(),
-        status: "running".to_string(),
-        progress: Some(65),
-        device_id: Some("dev-002".to_string()),
-        created_at: 1704067200000,
-        started_at: Some(1704067230000),
-        completed_at: None,
-        result: None,
-        error: None,
-    };
-
-    match cli.format.as_str() {
-        "json" => println!("{}", serde_json::to_string_pretty(&status)?),
-        _ => {
-            println!("\n{}", "Job Status:".green().bold());
-            println!("  Job ID:   #{}", status.job_id.to_string().cyan());
-            println!("  Name:     {}", status.name);
-            println!("  Status:   {}", status.status.yellow());
-            if let Some(progress) = status.progress {
-                let bar = "█".repeat((progress / 5) as usize);
-                let empty = "░".repeat(20 - (progress / 5) as usize);
-                println!(
-                    "  Progress: [{}{}] {}%",
-                    bar.green(),
-                    empty.dimmed(),
-                    progress
-                );
-            }
-            if let Some(dev) = &status.device_id {
-                println!("  Device:   {}", dev);
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Cancel job
-pub fn job_cancel(cli: &Cli, job_id: u64) -> Result<()> {
-    if !cli.quiet {
-        println!("{} job #{}...", "Cancelling".red(), job_id);
-    }
-    println!("{}", "Job cancelled.".green());
-    Ok(())
-}
-
-/// List jobs
-pub fn job_list(cli: &Cli, status_filter: Option<&str>, limit: usize) -> Result<()> {
-    if !cli.quiet {
-        println!("{}", "Listing jobs...".cyan());
-    }
-
-    // Mock job list
-    let jobs = vec![
-        ("1", "Read job", "completed", "dev-001", "100%"),
-        ("2", "Write job", "completed", "dev-002", "100%"),
-        ("3", "Analyze job", "running", "dev-001", "45%"),
-        ("4", "Read job", "queued", "-", "-"),
-        ("5", "Erase job", "queued", "-", "-"),
-    ];
-
-    let filtered: Vec<_> = jobs
-        .iter()
-        .filter(|(_, _, s, _, _)| status_filter.map(|f| *s == f).unwrap_or(true))
-        .take(limit)
-        .collect();
-
-    match cli.format.as_str() {
-        "json" => {
-            let json: Vec<_> = filtered
-                .iter()
-                .map(|(id, name, status, dev, prog)| {
-                    serde_json::json!({
-                        "id": id, "name": name, "status": status,
-                        "device": dev, "progress": prog
-                    })
-                })
-                .collect();
-            println!("{}", serde_json::to_string_pretty(&json)?);
-        }
-        _ => {
-            println!("\n{}", "Jobs:".green().bold());
-            println!(
-                "  {:<6} {:<15} {:<12} {:<10} {}",
-                "ID", "Name", "Status", "Device", "Progress"
-            );
-            println!("  {}", "-".repeat(55));
-            for (id, name, status, dev, prog) in filtered {
-                let status_colored = match *status {
-                    "completed" => status.green(),
-                    "running" => status.yellow(),
-                    "failed" => status.red(),
-                    _ => status.white(),
-                };
-                println!(
-                    "  {:<6} {:<15} {:<12} {:<10} {}",
-                    id.cyan(),
-                    name,
-                    status_colored,
-                    dev,
-                    prog
-                );
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Start parallel dump
-pub fn parallel_dump(
-    cli: &Cli,
-    output_dir: PathBuf,
-    device_count: usize,
-    chunk_size: &str,
-    merge: bool,
-) -> Result<()> {
-    let chunk_bytes = parse_address(chunk_size)?;
-
-    if !cli.quiet {
-        println!("{}", "Starting parallel dump...".cyan().bold());
-        println!(
-            "  Output:      {}",
-            output_dir.display().to_string().yellow()
-        );
-        println!("  Devices:     {}", device_count);
-        println!("  Chunk size:  {}", format_size(chunk_bytes));
-        println!(
-            "  Merge:       {}",
-            if merge { "yes".green() } else { "no".red() }
-        );
-    }
-
-    let config = ParallelDumpConfig {
-        device_count,
-        chunk_size: chunk_bytes,
-        output_dir: output_dir.display().to_string(),
-        merge_output: merge,
-        verify: true,
-    };
-
-    // Mock parallel dump - would actually coordinate multiple devices
-    let total_size = 128 * 1024 * 1024; // 128MB mock
-    let job = ParallelDumpJob::new(total_size, config);
-
-    println!("\n{}", "Parallel dump job created:".green());
-    println!("  Job ID:  {}", job.id.to_string().cyan());
-    println!("  Chunks:  {}", job.chunks.len());
-    println!("  Total:   {}", format_size(job.total_size));
-
-    Ok(())
-}
-
-/// Start production mode
-pub fn production_start(cli: &Cli, config_file: PathBuf, line_id: Option<&str>) -> Result<()> {
-    if !cli.quiet {
-        println!("{}", "Starting production mode...".cyan().bold());
-        println!("  Config: {}", config_file.display().to_string().yellow());
-        if let Some(id) = line_id {
-            println!("  Line:   {}", id);
-        }
-    }
-
-    // Mock production config
-    println!("\n{}", "Production line ready:".green());
-    println!("  Auto-start:   enabled");
-    println!("  Verification: full");
-    println!("  Logging:      enabled");
-    println!("\n{}", "Waiting for units...".dimmed());
-
-    Ok(())
-}
-
-/// Get production status
-pub fn production_status(cli: &Cli, line_id: Option<&str>) -> Result<()> {
-    if !cli.quiet {
-        println!("{}", "Production status:".cyan().bold());
-    }
-
-    // Mock production stats
-    let stats = ProductionStats {
-        line_id: line_id.unwrap_or("line-001").to_string(),
-        total_units: 1250,
-        passed_units: 1235,
-        failed_units: 15,
-        pass_rate: 98.8,
-        avg_cycle_time_ms: 45000,
-        units_per_hour: 80.0,
-        failure_reasons: {
-            let mut m = HashMap::new();
-            m.insert("bad_blocks".to_string(), 8);
-            m.insert("verify_failed".to_string(), 5);
-            m.insert("timeout".to_string(), 2);
-            m
-        },
-    };
-
-    match cli.format.as_str() {
-        "json" => println!("{}", serde_json::to_string_pretty(&stats)?),
-        _ => {
-            println!("\n{}", "Production Statistics:".green().bold());
-            println!("  Line ID:        {}", stats.line_id.cyan());
-            println!("  Total units:    {}", stats.total_units);
-            println!(
-                "  Passed:         {} ({:.1}%)",
-                stats.passed_units.to_string().green(),
-                stats.pass_rate
-            );
-            println!("  Failed:         {}", stats.failed_units.to_string().red());
-            println!(
-                "  Avg cycle time: {} seconds",
-                stats.avg_cycle_time_ms / 1000
-            );
-            println!("  Throughput:     {:.1} units/hour", stats.units_per_hour);
-
-            if !stats.failure_reasons.is_empty() {
-                println!("\n{}", "Failure reasons:".yellow());
-                for (reason, count) in &stats.failure_reasons {
-                    println!("    {}: {}", reason, count);
-                }
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Generate simple UUID-like string
-fn uuid_simple() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let ts = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    format!("{:016x}", ts)
+/// Report that a feature is declared but not implemented.
+///
+/// Returns an error so the process exits non-zero. Several commands used to
+/// print a plausible success summary and exit 0 instead, which is worse than
+/// not having them at all: a script could not tell that nothing had happened.
+pub fn not_implemented(feature: &str, detail: &str) -> Result<()> {
+    Err(format!("{feature} is not implemented in this build.\n{detail}").into())
 }

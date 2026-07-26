@@ -298,6 +298,19 @@ pub struct Device<T: Transport> {
     read_only: bool,
 }
 
+// Written by hand rather than derived: a transport is not required to be
+// `Debug`, and the useful information is what the device reported about itself.
+impl<T: Transport> fmt::Debug for Device<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Device")
+            .field("connection", &self.transport.kind().to_string())
+            .field("protocol", &self.version.protocol)
+            .field("chip", &self.chip.as_ref().map(|c| &c.model))
+            .field("read_only", &self.read_only)
+            .finish()
+    }
+}
+
 impl<T: Transport> Device<T> {
     /// Handshake with a device and check that both sides speak the same
     /// protocol revision.
@@ -737,28 +750,81 @@ mod tests {
         assert_eq!(chip.sector_size, 4096);
     }
 
+    /// A transport that answers the id query with a fixed value, for simulating
+    /// a bus with nothing on it. The emulator cannot do this: it derives its id
+    /// from its own array, so it can only report a chip that exists.
+    struct FixedIdDevice([u8; 3]);
+
+    impl Transport for FixedIdDevice {
+        fn kind(&self) -> TransportKind {
+            TransportKind::Emulator {
+                chip: "fixed-id".into(),
+            }
+        }
+
+        fn exchange(
+            &mut self,
+            request: &[u8],
+            _timeout: Duration,
+        ) -> crate::transport::TransportResult<Vec<u8>> {
+            let frame = openflash_protocol::Frame::decode(request).unwrap();
+            let command = frame.decoded_command().unwrap();
+            let payload = match command {
+                Command::SpiNorReadJedecId => self.0.to_vec(),
+                Command::GetVersion => VersionInfo {
+                    protocol: PROTOCOL_VERSION,
+                    firmware: (3, 1, 0),
+                    platform: Some(openflash_protocol::Platform::Rp2040),
+                    interfaces: VersionInfo::bitmap_of(&[FlashInterface::SpiNor]),
+                }
+                .to_bytes()
+                .to_vec(),
+                _ => Vec::new(),
+            };
+            Ok(openflash_protocol::Frame::response(
+                command,
+                openflash_protocol::Status::Ok,
+                &payload,
+            )
+            .encode_to_vec()
+            .unwrap())
+        }
+    }
+
     /// A disconnected bus reads back as all-ones. Reporting that as a chip is
     /// exactly how a tool ends up "detecting" hardware that is not there.
     #[test]
     fn an_empty_bus_is_reported_as_no_chip() {
-        // 0xFF:0xFF:0xFF is what an unpopulated socket returns.
-        let mut device =
-            Device::connect(EmulatedDevice::new("EMPTY", [0xFF, 0xFF, 0xFF], 64 * 1024)).unwrap();
+        let mut device = Device::connect(FixedIdDevice([0xFF, 0xFF, 0xFF])).unwrap();
 
         match device.identify() {
             Err(DeviceError::NoChipDetected { id }) => assert_eq!(id, vec![0xFF, 0xFF, 0xFF]),
-            other => panic!("expected no-chip detection, got {other:?}"),
+            Err(other) => panic!("expected no-chip detection, got {other:?}"),
+            Ok(chip) => panic!("an empty bus must not identify as {chip:?}"),
         }
     }
 
     #[test]
     fn a_grounded_bus_is_reported_as_no_chip() {
-        let mut device =
-            Device::connect(EmulatedDevice::new("ZERO", [0x00, 0x00, 0x00], 64 * 1024)).unwrap();
+        let mut device = Device::connect(FixedIdDevice([0x00, 0x00, 0x00])).unwrap();
         assert!(matches!(
             device.identify(),
             Err(DeviceError::NoChipDetected { .. })
         ));
+    }
+
+    /// An id whose capacity byte decodes to no known size must be reported as
+    /// unknown rather than guessed at.
+    #[test]
+    fn an_unrecognised_capacity_byte_is_reported_as_an_unknown_chip() {
+        let mut device = Device::connect(FixedIdDevice([0xEF, 0x40, 0x7F])).unwrap();
+        match device.identify() {
+            Err(DeviceError::UnknownChip { jedec_id }) => {
+                assert_eq!(jedec_id, [0xEF, 0x40, 0x7F])
+            }
+            Err(other) => panic!("expected an unknown chip, got {other:?}"),
+            Ok(chip) => panic!("an unknown capacity byte must not identify as {chip:?}"),
+        }
     }
 
     #[test]

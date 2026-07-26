@@ -266,6 +266,19 @@ pub trait Transport {
     }
 }
 
+/// Lets a boxed, type-erased transport be used wherever a `Transport` is
+/// expected, so callers can choose USB, TCP, a Unix socket or the emulator at
+/// runtime without the whole call stack becoming generic.
+impl<T: Transport + ?Sized> Transport for Box<T> {
+    fn kind(&self) -> TransportKind {
+        (**self).kind()
+    }
+
+    fn exchange(&mut self, request: &[u8], timeout: Duration) -> TransportResult<Vec<u8>> {
+        (**self).exchange(request, timeout)
+    }
+}
+
 /// Read exactly one frame from a blocking byte stream.
 ///
 /// Reads in chunks and re-attempts decoding after each one, because a stream

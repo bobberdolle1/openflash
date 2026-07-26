@@ -1,14 +1,17 @@
 [package]
 name = "openflash-firmware-raspberry-pi"
-version = "2.3.0"
-edition = "2021"
-description = "OpenFlash GPIO driver for Raspberry Pi (3B+, 4, 5, Zero 2W)"
+description = "OpenFlash agent for Raspberry Pi (3B+, 4, 5, Zero 2W)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 
 [dependencies]
+# The opcode table and framing come from the shared crate, so this agent cannot
+# drift away from what the host speaks.
+openflash-protocol = { workspace = true }
 rppal = "0.18"
-tokio = { version = "1.0", features = ["full"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
 thiserror = "1.0"
 log = "0.4"
 env_logger = "0.11"

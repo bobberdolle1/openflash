@@ -36,8 +36,14 @@ jobs:
 
       # pyopenflash is a Python cdylib and the Tauri GUI needs webkit, so the
       # portable test surface is protocol + core + cli.
+      # The Raspberry Pi agent is a Linux binary, so it builds here too; it is
+      # skipped on macOS and Windows because it needs the Linux GPIO/SPI crates.
       - name: Test protocol, core and CLI
         run: cargo test -p openflash-protocol -p openflash-core -p openflash-cli --all-features
+
+      - name: Test the Raspberry Pi agent
+        if: runner.os == 'Linux'
+        run: cargo test -p openflash-firmware-raspberry-pi
 
   lint:
     name: Lint
@@ -59,7 +65,9 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Clippy
-        run: cargo clippy -p openflash-protocol -p openflash-core -p openflash-cli --all-targets --all-features -- -D warnings
+        run: |
+          cargo clippy -p openflash-protocol -p openflash-core -p openflash-cli \
+            -p openflash-firmware-raspberry-pi --all-targets --all-features -- -D warnings
 
   msrv:
     name: MSRV 1.77

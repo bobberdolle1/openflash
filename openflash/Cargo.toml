@@ -5,8 +5,26 @@ members = [
     "cli",
     "pyopenflash",
     "gui/src-tauri",
-    # Firmware crates target bare-metal and pin their own embassy/esp-hal
-    # versions, so they are built separately (see .github/workflows/firmware.yml).
+    # The single-board-computer agents are ordinary Linux binaries, so they build
+    # and lint alongside the host tools.
+    "firmware/raspberry_pi",
+]
+
+# The microcontroller firmware targets bare metal: each crate pins its own
+# embassy/esp-hal versions and needs a cross toolchain, a linker script and a
+# per-board target, so they are not part of this workspace. Their opcode tables
+# are still checked against the shared protocol by
+# protocol/tests/firmware_conformance.rs.
+exclude = [
+    "firmware/rp2040",
+    "firmware/rp2350",
+    "firmware/stm32f1",
+    "firmware/stm32f4",
+    "firmware/esp32",
+    "firmware/teensy4",
+    "firmware/arduino_giga",
+    "firmware/orange_pi",
+    "firmware/banana_pi",
 ]
 resolver = "2"
 

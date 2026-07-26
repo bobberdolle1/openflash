@@ -1,17 +1,28 @@
 [workspace]
 members = [
+    "protocol",
     "core",
     "cli",
     "pyopenflash",
     "gui/src-tauri",
-    # Firmware requires specific embassy versions, build separately
-    # "firmware/rp2040",
-    # "firmware/stm32f1",
+    # Firmware crates target bare-metal and pin their own embassy/esp-hal
+    # versions, so they are built separately (see .github/workflows/firmware.yml).
 ]
 resolver = "2"
 
+[workspace.package]
+version = "3.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/bobberdolle1/openflash"
+rust-version = "1.77"
+
 [workspace.dependencies]
-# Shared dependencies for the entire workspace
+# Internal crates
+openflash-protocol = { path = "protocol", version = "3.1.0" }
+openflash-core = { path = "core", version = "3.1.0" }
+
+# Shared third-party dependencies
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.0", features = ["full"] }

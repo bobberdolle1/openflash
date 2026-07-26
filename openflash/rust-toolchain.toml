@@ -1,0 +1,6 @@
+# Host-side crates track stable Rust. The minimum supported version is declared
+# per-crate via `rust-version` (workspace.package) and verified by the `msrv`
+# job in .github/workflows/ci.yml.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]

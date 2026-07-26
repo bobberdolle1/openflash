@@ -5,7 +5,7 @@ edition = "2021"
 description = "Command-line interface for OpenFlash NAND/eMMC programmer"
 license = "MIT"
 authors = ["OpenFlash Team"]
-repository = "https://github.com/openflash/openflash"
+repository = "https://github.com/bobberdolle1/openflash"
 keywords = ["nand", "flash", "programmer", "cli", "embedded"]
 categories = ["command-line-utilities", "embedded", "hardware-support"]
 

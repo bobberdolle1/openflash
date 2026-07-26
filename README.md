@@ -1,7 +1,7 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/openflash/openflash/main/.github/assets/logo-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/openflash/openflash/main/.github/assets/logo.svg">
-  <img alt="OpenFlash" src="https://raw.githubusercontent.com/openflash/openflash/main/.github/assets/logo.svg" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/bobberdolle1/openflash/main/.github/assets/logo-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/bobberdolle1/openflash/main/.github/assets/logo.svg">
+  <img alt="OpenFlash" src="https://raw.githubusercontent.com/bobberdolle1/openflash/main/.github/assets/logo.svg" width="100%">
 </picture>
 
 <div align="center">
@@ -447,8 +447,8 @@ openflash batch jobs.toml
 ```bash
 # Prerequisites: Rust 1.70+, Node 18+
 
-git clone https://github.com/openflash/openflash.git
-cd openflash/openflash
+git clone https://github.com/bobberdolle1/openflash.git
+cd bobberdolle1/openflash
 
 # ┌─────────────────────────────────────────────────────────────┐
 # │  GUI (Tauri + React)                                        │
@@ -908,8 +908,8 @@ openflash batch jobs.toml
 ```bash
 # Требования: Rust 1.70+, Node 18+
 
-git clone https://github.com/openflash/openflash.git
-cd openflash/openflash
+git clone https://github.com/bobberdolle1/openflash.git
+cd bobberdolle1/openflash
 
 # ┌─────────────────────────────────────────────────────────────┐
 # │  GUI (Tauri + React)                                        │
@@ -978,7 +978,7 @@ cargo build --release --target thumbv7em-none-eabihf
 
 <br>
 
-**[⭐ Star](https://github.com/openflash/openflash)** · **[🐛 Issues](https://github.com/openflash/openflash/issues)** · **[💬 Discussions](https://github.com/openflash/openflash/discussions)**
+**[⭐ Star](https://github.com/bobberdolle1/openflash)** · **[🐛 Issues](https://github.com/bobberdolle1/openflash/issues)** · **[💬 Discussions](https://github.com/bobberdolle1/openflash/discussions)**
 
 <br>
 

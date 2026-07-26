@@ -1113,17 +1113,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **1.0.0** - Initial public release
 - **0.x.x** - Development versions (not released)
 
-[Unreleased]: https://github.com/openflash/openflash/compare/v2.1.0...HEAD
-[2.1.0]: https://github.com/openflash/openflash/compare/v2.0.0...v2.1.0
-[2.0.0]: https://github.com/openflash/openflash/compare/v1.9.0...v2.0.0
-[1.9.0]: https://github.com/openflash/openflash/compare/v1.8.0...v1.9.0
-[1.8.0]: https://github.com/openflash/openflash/compare/v1.7.0...v1.8.0
-[1.7.0]: https://github.com/openflash/openflash/compare/v1.6.0...v1.7.0
-[1.6.0]: https://github.com/openflash/openflash/compare/v1.5.0...v1.6.0
-[1.5.0]: https://github.com/openflash/openflash/compare/v1.4.0...v1.5.0
-[1.4.0]: https://github.com/openflash/openflash/compare/v1.3.0...v1.4.0
-[1.3.0]: https://github.com/openflash/openflash/compare/v1.25.0...v1.3.0
-[1.25.0]: https://github.com/openflash/openflash/compare/v1.2.0...v1.25.0
-[1.2.0]: https://github.com/openflash/openflash/compare/v1.1.0...v1.2.0
-[1.1.0]: https://github.com/openflash/openflash/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/openflash/openflash/releases/tag/v1.0.0
+[Unreleased]: https://github.com/bobberdolle1/openflash/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/bobberdolle1/openflash/compare/v2.0.0...v2.1.0
+[2.0.0]: https://github.com/bobberdolle1/openflash/compare/v1.9.0...v2.0.0
+[1.9.0]: https://github.com/bobberdolle1/openflash/compare/v1.8.0...v1.9.0
+[1.8.0]: https://github.com/bobberdolle1/openflash/compare/v1.7.0...v1.8.0
+[1.7.0]: https://github.com/bobberdolle1/openflash/compare/v1.6.0...v1.7.0
+[1.6.0]: https://github.com/bobberdolle1/openflash/compare/v1.5.0...v1.6.0
+[1.5.0]: https://github.com/bobberdolle1/openflash/compare/v1.4.0...v1.5.0
+[1.4.0]: https://github.com/bobberdolle1/openflash/compare/v1.3.0...v1.4.0
+[1.3.0]: https://github.com/bobberdolle1/openflash/compare/v1.25.0...v1.3.0
+[1.25.0]: https://github.com/bobberdolle1/openflash/compare/v1.2.0...v1.25.0
+[1.2.0]: https://github.com/bobberdolle1/openflash/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/bobberdolle1/openflash/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/bobberdolle1/openflash/releases/tag/v1.0.0

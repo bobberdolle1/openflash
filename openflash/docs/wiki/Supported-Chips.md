@@ -75,7 +75,7 @@ If your chip isn't recognized:
 
 1. OpenFlash will show "Unknown" with the chip ID
 2. You can still try operations with manual settings
-3. [Request chip support](https://github.com/openflash/openflash/issues/new?template=chip_support.md)
+3. [Request chip support](https://github.com/bobberdolle1/openflash/issues/new?template=chip_support.md)
 
 ## Adding New Chips
 

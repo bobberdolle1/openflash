@@ -1,9 +1,9 @@
 # Rust
 /target/
 **/target/
-Cargo.lock
-!openflash/Cargo.lock
 
+# Cargo.lock IS tracked: this workspace ships binaries (CLI, GUI), so builds
+# must be reproducible and `cargo audit` must have a lockfile to audit.
 
 # Node
 node_modules/

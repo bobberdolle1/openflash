@@ -4,122 +4,143 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
 
+defaults:
+  run:
+    working-directory: openflash
+
 jobs:
-  # Core library tests
-  test-core:
-    name: Test Core Library
-    runs-on: ubuntu-latest
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Install Rust
-        uses: dtolnay/rust-action@stable
-        
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            openflash/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          
-      - name: Run tests
-        working-directory: openflash
-        run: cargo test -p openflash-core --verbose
 
-  # Check GUI backend compiles
-  check-gui:
-    name: Check GUI Backend
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Install Rust
-        uses: dtolnay/rust-action@stable
-        
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libudev-dev
-          
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            openflash/target/
-          key: ${{ runner.os }}-cargo-gui-${{ hashFiles('**/Cargo.lock') }}
-          
-      - name: Check GUI backend
-        working-directory: openflash
-        run: cargo check -p openflash-gui
+      - uses: dtolnay/rust-toolchain@stable
 
-  # Build frontend
-  build-frontend:
-    name: Build Frontend
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: Swatinem/rust-cache@v2
         with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: openflash/gui/package-lock.json
-          
-      - name: Install dependencies
-        working-directory: openflash/gui
-        run: npm ci
-        
-      - name: Build frontend
-        working-directory: openflash/gui
-        run: npm run build
-        
-      - name: TypeScript check
-        working-directory: openflash/gui
-        run: npx tsc --noEmit
+          workspaces: openflash
 
-  # Lint
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev
+
+      # pyopenflash is a Python cdylib and the Tauri GUI needs webkit, so the
+      # portable test surface is protocol + core + cli.
+      - name: Test protocol, core and CLI
+        run: cargo test -p openflash-protocol -p openflash-core -p openflash-cli --all-features
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Install Rust
-        uses: dtolnay/rust-action@stable
+
+      - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
-          
-      - name: Check formatting
-        working-directory: openflash
-        run: cargo fmt -p openflash-core -- --check
-        
-      - name: Clippy
-        working-directory: openflash
-        run: cargo clippy -p openflash-core -- -D warnings
 
-  # Security audit
-  security:
-    name: Security Audit
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: openflash
+
+      - run: sudo apt-get update && sudo apt-get install -y libudev-dev
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy -p openflash-protocol -p openflash-core -p openflash-cli --all-targets --all-features -- -D warnings
+
+  msrv:
+    name: MSRV 1.77
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install cargo-audit
-        run: cargo install cargo-audit
-      - name: Run audit
-        working-directory: openflash
-        run: cargo audit || true  # Don't fail on advisories for now
+      - uses: dtolnay/rust-toolchain@1.77
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: openflash
+      - run: sudo apt-get update && sudo apt-get install -y libudev-dev
+      # rust-toolchain.toml pins `stable` for day-to-day work; override it here.
+      - name: Check against minimum supported Rust version
+        run: cargo +1.77 check -p openflash-protocol -p openflash-core -p openflash-cli
+
+  gui:
+    name: GUI (backend + frontend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: openflash/gui/package-lock.json
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: openflash
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf libudev-dev
+
+      - name: Install frontend dependencies
+        working-directory: openflash/gui
+        run: npm ci
+
+      - name: TypeScript check
+        working-directory: openflash/gui
+        run: npx tsc --noEmit
+
+      - name: Build frontend
+        working-directory: openflash/gui
+        run: npm run build
+
+      - name: Clippy GUI backend
+        run: cargo clippy -p openflash-gui --all-targets -- -D warnings
+
+  python:
+    name: Python bindings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: openflash
+      - run: pip install maturin
+      - name: Build wheel and import it
+        working-directory: openflash/pyopenflash
+        run: |
+          maturin build --release --out dist
+          pip install --no-index --find-links dist openflash
+          python -c "import openflash; print(openflash.protocol_version())"
+
+  audit:
+    name: Security audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

@@ -111,7 +111,7 @@ See [Troubleshooting](Troubleshooting.md#gui-issues)
 - Submit code improvements
 - Translate the UI
 
-See [CONTRIBUTING.md](https://github.com/openflash/openflash/blob/main/CONTRIBUTING.md)
+See [CONTRIBUTING.md](https://github.com/bobberdolle1/openflash/blob/main/CONTRIBUTING.md)
 
 ### How do I add support for a new chip?
 1. Get the chip ID

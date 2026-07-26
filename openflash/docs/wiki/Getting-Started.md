@@ -21,7 +21,7 @@ This guide will help you get OpenFlash up and running.
 
 ### Option 1: Download Release (Recommended)
 
-1. Go to [Releases](https://github.com/openflash/openflash/releases)
+1. Go to [Releases](https://github.com/bobberdolle1/openflash/releases)
 2. Download the installer for your OS:
    - Windows: `OpenFlash-x.x.x-setup.exe`
    - macOS: `OpenFlash-x.x.x.dmg`
@@ -36,8 +36,8 @@ This guide will help you get OpenFlash up and running.
 # - Node.js 18+
 # - Tauri prerequisites (see tauri.app)
 
-git clone https://github.com/openflash/openflash.git
-cd openflash/openflash/gui
+git clone https://github.com/bobberdolle1/openflash.git
+cd bobberdolle1/openflash/gui
 npm install
 cargo tauri build
 ```

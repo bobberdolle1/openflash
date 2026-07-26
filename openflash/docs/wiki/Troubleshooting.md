@@ -40,7 +40,7 @@ Common issues and solutions.
 3. Add 10kΩ pull-up on R/B# line
 4. Check for cold solder joints
 5. Try slower timing (if supported)
-6. [Report chip](https://github.com/openflash/openflash/issues/new?template=chip_support.md) for database addition
+6. [Report chip](https://github.com/bobberdolle1/openflash/issues/new?template=chip_support.md) for database addition
 
 ### All 0xFF or 0x00 chip ID
 
@@ -183,9 +183,9 @@ Common issues and solutions.
 
 ## Still Having Issues?
 
-1. Check [GitHub Issues](https://github.com/openflash/openflash/issues) for similar problems
-2. Ask in [Discussions](https://github.com/openflash/openflash/discussions)
-3. Open a [bug report](https://github.com/openflash/openflash/issues/new?template=bug_report.md) with:
+1. Check [GitHub Issues](https://github.com/bobberdolle1/openflash/issues) for similar problems
+2. Ask in [Discussions](https://github.com/bobberdolle1/openflash/discussions)
+3. Open a [bug report](https://github.com/bobberdolle1/openflash/issues/new?template=bug_report.md) with:
    - OS and version
    - Hardware used
    - Steps to reproduce

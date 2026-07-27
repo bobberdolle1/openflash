@@ -5,7 +5,79 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+> **How to read the entries below 3.0.0**
+>
+> They record code that was *written*, which is not the same as features that
+> *worked*. Several describe subsystems that do not build, are not reachable from
+> any binary, or depend on hardware and services that do not exist — the 3.0.0
+> "Cloud & Collaboration" entry is a data model with no HTTP client behind it, and
+> the platform counts in 2.3.x include boards whose firmware has never compiled.
+>
+> The version dates are also unreliable: entries from 2.1.0 up are stamped
+> "2027-Q1", which had not happened when they were written.
+>
+> [PLATFORMS.md](openflash/docs/PLATFORMS.md) is the authority on what works. The
+> history is left as written rather than rewritten, because the gap between it and
+> the code is itself worth being able to see. [ROADMAP.md](ROADMAP.md) has a
+> point-by-point accounting.
+
 ## [Unreleased]
+
+### Fixed
+
+- **BCH ECC now works.** It previously refused to run, having repaired none of
+  4096 injected single-bit errors and mis-corrected ten. The generator polynomial
+  was built over GF(2^13) where a binary BCH code needs one over GF(2); the
+  encoder and syndrome evaluation also disagreed on bit order, and the Chien
+  search skipped the parity bits. Verified against the definition — primitive
+  polynomials checked for primitivity, α^1…α^2t confirmed as roots, parity length
+  equal to *m·t* giving the 7/13/26/42-byte ECC sizes NAND datasheets quote — and
+  by repairing every one of the 4148 single-bit errors in a 512-byte codeword.
+  Mis-correction is guarded structurally: syndromes are recomputed after the fix
+  and must vanish, otherwise the sector is reported uncorrectable and the
+  caller's buffer is untouched.
+- **`openflash chips` queries the real database.** It printed five hardcoded
+  parts under the heading "Supported chips", unrelated to the 207 the rest of the
+  tool matches against. It now looks parts up by id across all four databases and
+  distinguishes catalogue entries from geometry derived from the id. Listing the
+  whole database is still unavailable — the databases are `match` arms keyed by
+  id, so they can be queried but not iterated — and the command says so instead
+  of substituting a list.
+- **`openflash analyze` analyses the file.** It read the input, discarded it and
+  printed a fixed result — a SquashFS at 0x10000 and a U-Boot image at 0, same
+  confidences every time, for any input. It now calls the analysis engine in
+  `openflash_core::ai` that the Python bindings already used, and the text output
+  shows the filesystems, anomalies and key candidates it was computing and
+  throwing away.
+- **`openflash rootfs` no longer invents a file listing.** It returned a fixed
+  set of paths — `/bin/busybox`, `/etc/passwd`, `/etc/shadow` — for every
+  SquashFS, JFFS2 or CramFS image, printed them, and wrote them to `_files.txt`
+  on disk. In a tool used for recovery and security work, fabricated paths that
+  look like real findings are the worst failure available. It now reports what
+  the superblock actually contains, carves the filesystem image out so another
+  tool can open it, and says plainly that listing contents is not implemented.
+- **`openflash config` refuses instead of pretending.** `show` printed four fixed
+  values read from nowhere, and `set` reported success while storing nothing.
+- **Minimum supported Rust version corrected to 1.85** (1.88 for the desktop
+  app). The declared 1.77 had been wrong since the USB transport was added: nusb
+  needs 1.79, and a transitive edition-2024 manifest cannot be parsed by a Cargo
+  older than 1.85. The job that checks this has never been able to run.
+
+### Security
+
+- **pyo3 0.23 → 0.29**, closing RUSTSEC-2025-0020 (buffer overflow in
+  `PyString::from_object`) and RUSTSEC-2026-0177 (missing `Sync` bound on
+  `PyCFunction::new_closure`). `cargo audit` reports no vulnerabilities.
+
+### Changed
+
+- Documentation corrected throughout to match what the code does: the wiki's
+  "Fully Tested ✅" chip table (nothing in this repository can read the parallel
+  NAND parts it listed), download links to release assets that do not exist,
+  Gerber and KiCad files for a board that was never designed, and the Teensy 4
+  being "closest to compatible" when its USB layer cannot receive a command.
+  Wiring for the one configuration that does work — a single-board computer and a
+  SPI NOR chip — was missing entirely and has been added.
 
 ## [3.0.0] - 2027-Q1
 
@@ -1113,17 +1185,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **1.0.0** - Initial public release
 - **0.x.x** - Development versions (not released)
 
-[Unreleased]: https://github.com/openflash/openflash/compare/v2.1.0...HEAD
-[2.1.0]: https://github.com/openflash/openflash/compare/v2.0.0...v2.1.0
-[2.0.0]: https://github.com/openflash/openflash/compare/v1.9.0...v2.0.0
-[1.9.0]: https://github.com/openflash/openflash/compare/v1.8.0...v1.9.0
-[1.8.0]: https://github.com/openflash/openflash/compare/v1.7.0...v1.8.0
-[1.7.0]: https://github.com/openflash/openflash/compare/v1.6.0...v1.7.0
-[1.6.0]: https://github.com/openflash/openflash/compare/v1.5.0...v1.6.0
-[1.5.0]: https://github.com/openflash/openflash/compare/v1.4.0...v1.5.0
-[1.4.0]: https://github.com/openflash/openflash/compare/v1.3.0...v1.4.0
-[1.3.0]: https://github.com/openflash/openflash/compare/v1.25.0...v1.3.0
-[1.25.0]: https://github.com/openflash/openflash/compare/v1.2.0...v1.25.0
-[1.2.0]: https://github.com/openflash/openflash/compare/v1.1.0...v1.2.0
-[1.1.0]: https://github.com/openflash/openflash/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/openflash/openflash/releases/tag/v1.0.0
+[Unreleased]: https://github.com/bobberdolle1/openflash/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/bobberdolle1/openflash/compare/v2.0.0...v2.1.0
+[2.0.0]: https://github.com/bobberdolle1/openflash/compare/v1.9.0...v2.0.0
+[1.9.0]: https://github.com/bobberdolle1/openflash/compare/v1.8.0...v1.9.0
+[1.8.0]: https://github.com/bobberdolle1/openflash/compare/v1.7.0...v1.8.0
+[1.7.0]: https://github.com/bobberdolle1/openflash/compare/v1.6.0...v1.7.0
+[1.6.0]: https://github.com/bobberdolle1/openflash/compare/v1.5.0...v1.6.0
+[1.5.0]: https://github.com/bobberdolle1/openflash/compare/v1.4.0...v1.5.0
+[1.4.0]: https://github.com/bobberdolle1/openflash/compare/v1.3.0...v1.4.0
+[1.3.0]: https://github.com/bobberdolle1/openflash/compare/v1.25.0...v1.3.0
+[1.25.0]: https://github.com/bobberdolle1/openflash/compare/v1.2.0...v1.25.0
+[1.2.0]: https://github.com/bobberdolle1/openflash/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/bobberdolle1/openflash/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/bobberdolle1/openflash/releases/tag/v1.0.0

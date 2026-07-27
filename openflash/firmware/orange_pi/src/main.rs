@@ -1,137 +1,129 @@
-//! OpenFlash GPIO Driver for Orange Pi
+//! OpenFlash agent for Orange Pi boards.
 //!
-//! Supports various Orange Pi boards:
-//! - Orange Pi Zero 3 (Allwinner H618)
-//! - Orange Pi Zero 2W (Allwinner H616)
-//! - Orange Pi 5 (Rockchip RK3588)
+//! A Linux daemon that drives the flash chip through the board's SPI controller
+//! and serves hosts over a Unix socket or TCP. The protocol handling and the SPI
+//! NOR sequencing come from `openflash-sbc-agent`, shared with the Raspberry Pi
+//! and Banana Pi agents; this file is the board-specific part.
 //!
-//! Uses memory-mapped GPIO for direct register access.
+//! Supported boards: Orange Pi Zero 3 (Allwinner H618), Zero 2W (H616),
+//! Orange Pi 5 (Rockchip RK3588).
+//!
+//! # What this replaces
+//!
+//! The previous version declared its own opcode table in which `Ping` was `0x00`
+//! rather than `0x01`, so a current host could not even ping it. It replied
+//! without framing, and answered `0xFF` to everything except ping, version and
+//! device info — the SPI and GPIO modules were never connected to the command
+//! handler. Its SPI transfer also issued a `write` syscall followed by a separate
+//! `read` on `/dev/spidev*`, which lets the kernel deassert chip select in
+//! between, so a flash chip discards the command before the data arrives.
 
-use log::{info, error, warn};
-use std::io::{Read, Write};
-use std::os::unix::net::{UnixListener, UnixStream};
-use std::path::Path;
+use log::{error, info, warn};
+
+use openflash_sbc_agent::{listen_tcp, listen_unix, Agent, Platform, SpiNor};
 
 mod gpio;
 mod spi;
-mod protocol;
 
-/// Protocol version for v2.3.0
-const PROTOCOL_VERSION: u8 = 0x23;
+/// Agent version, reported in the `GetVersion` reply.
+const VERSION: (u8, u8, u8) = (3, 1, 0);
 
-/// Firmware version
-const VERSION: &str = "2.3.0";
-
-/// Platform identifier
-const PLATFORM_ID: u8 = 0x11; // Orange Pi
-
-/// Socket path
+/// Default Unix socket path.
 const SOCKET_PATH: &str = "/tmp/openflash.sock";
 
 fn main() {
     env_logger::init();
-    
-    info!("OpenFlash Orange Pi Driver v{}", VERSION);
-    info!("Protocol version: 0x{:02X}", PROTOCOL_VERSION);
-    
-    // Detect board
+
+    info!(
+        "OpenFlash Orange Pi agent v{}.{}.{}, protocol v{}",
+        VERSION.0,
+        VERSION.1,
+        VERSION.2,
+        openflash_sbc_agent::PROTOCOL_VERSION
+    );
+
     match detect_board() {
-        Some(board) => info!("Detected: {}", board),
-        None => {
-            error!("Failed to detect Orange Pi board");
-            std::process::exit(1);
-        }
+        Some(board) => info!("Detected {board}"),
+        None => warn!("Could not identify the board; continuing anyway"),
     }
-    
-    // Remove old socket
-    if Path::new(SOCKET_PATH).exists() {
-        std::fs::remove_file(SOCKET_PATH).ok();
-    }
-    
-    // Create listener
-    let listener = match UnixListener::bind(SOCKET_PATH) {
-        Ok(l) => l,
-        Err(e) => {
-            error!("Failed to bind socket: {}", e);
-            std::process::exit(1);
+
+    // An agent that cannot open the bus still starts and still answers: it
+    // reports no interfaces, so a host learns that once instead of having every
+    // operation fail separately.
+    let bus = match spi::SpidevBus::open(spi::DEFAULT_DEVICE) {
+        Ok(bus) => bus,
+        Err(error) => {
+            error!("Cannot open {}: {error}", spi::DEFAULT_DEVICE);
+            error!("Enable the spidev overlay and check that the device node exists");
+            spi::SpidevBus::unavailable(error.to_string())
         }
     };
-    
-    info!("Listening on {}", SOCKET_PATH);
-    
-    for stream in listener.incoming() {
-        match stream {
-            Ok(stream) => {
-                info!("Client connected");
-                handle_client(stream);
-            }
-            Err(e) => {
-                warn!("Connection failed: {}", e);
-            }
-        }
+
+    let mut agent = Agent::new(SpiNor::new(bus), Platform::OrangePi, VERSION);
+
+    match std::env::var("OPENFLASH_TCP") {
+        Ok(address) => listen_tcp(&address, &mut agent),
+        Err(_) => listen_unix(SOCKET_PATH, &mut agent),
     }
 }
 
-/// Detect Orange Pi board from device tree
+/// Identify the board from the device tree model, falling back to `/proc/cpuinfo`.
 fn detect_board() -> Option<&'static str> {
-    let model = std::fs::read_to_string("/proc/device-tree/model").ok()?;
-    
-    if model.contains("Zero 3") || model.contains("H618") {
-        Some("Orange Pi Zero 3 (H618)")
-    } else if model.contains("Zero 2W") || model.contains("H616") {
-        Some("Orange Pi Zero 2W (H616)")
-    } else if model.contains("5") || model.contains("RK3588") {
-        Some("Orange Pi 5 (RK3588)")
-    } else if model.contains("Orange Pi") {
-        Some("Orange Pi (Unknown)")
-    } else {
-        None
+    if let Ok(model) = std::fs::read_to_string("/proc/device-tree/model") {
+        if let Some(name) = board_from_model(&model) {
+            return Some(name);
+        }
     }
+    let cpuinfo = std::fs::read_to_string("/proc/cpuinfo").ok()?;
+    board_from_model(&cpuinfo)
 }
 
-/// Handle client connection
-fn handle_client(mut stream: UnixStream) {
-    let mut buf = [0u8; 64];
-    
-    loop {
-        match stream.read(&mut buf) {
-            Ok(0) => {
-                info!("Client disconnected");
-                break;
-            }
-            Ok(n) => {
-                let response = process_command(&buf[..n]);
-                if let Err(e) = stream.write_all(&response) {
-                    error!("Write error: {}", e);
-                    break;
-                }
-            }
-            Err(e) => {
-                error!("Read error: {}", e);
-                break;
-            }
-        }
-    }
+fn board_from_model(text: &str) -> Option<&'static str> {
+    // Most specific marker first, so H618 is not matched by a looser pattern.
+    const BOARDS: &[(&str, &str)] = &[
+        ("RK3588", "Orange Pi 5 (Rockchip RK3588)"),
+        ("H618", "Orange Pi Zero 3 (Allwinner H618)"),
+        ("H616", "Orange Pi Zero 2W (Allwinner H616)"),
+        ("SUN50I", "Orange Pi (Allwinner sun50i)"),
+    ];
+
+    let upper = text.to_uppercase();
+    BOARDS
+        .iter()
+        .find(|(marker, _)| upper.contains(marker))
+        .map(|(_, name)| *name)
 }
 
-/// Process command
-fn process_command(cmd: &[u8]) -> Vec<u8> {
-    if cmd.is_empty() {
-        return vec![0xFF];
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn board_detection_recognises_the_supported_socs() {
+        assert_eq!(
+            board_from_model("Orange Pi 5 rk3588s\n"),
+            Some("Orange Pi 5 (Rockchip RK3588)")
+        );
+        assert_eq!(
+            board_from_model("Hardware\t: Allwinner H618\n"),
+            Some("Orange Pi Zero 3 (Allwinner H618)")
+        );
+        assert_eq!(
+            board_from_model("Hardware\t: Allwinner H616\n"),
+            Some("Orange Pi Zero 2W (Allwinner H616)")
+        );
     }
-    
-    match cmd[0] {
-        0x00 => vec![0x00, PROTOCOL_VERSION],
-        0x01 => {
-            let mut resp = vec![0x01, PLATFORM_ID, PROTOCOL_VERSION];
-            resp.extend_from_slice(&0x0000_001Fu32.to_le_bytes());
-            resp
-        }
-        0x02 => {
-            let mut resp = vec![0x02];
-            resp.extend_from_slice(VERSION.as_bytes());
-            resp
-        }
-        _ => vec![0xFF, cmd[0]],
+
+    #[test]
+    fn an_unknown_board_is_not_guessed_at() {
+        assert_eq!(board_from_model("Raspberry Pi 4 Model B\n"), None);
+    }
+
+    /// A host is told this as the firmware version, so it has to correspond to
+    /// the build rather than to a number someone typed once.
+    #[test]
+    fn the_reported_version_matches_the_crate() {
+        let reported = format!("{}.{}.{}", VERSION.0, VERSION.1, VERSION.2);
+        assert_eq!(reported, env!("CARGO_PKG_VERSION"));
     }
 }

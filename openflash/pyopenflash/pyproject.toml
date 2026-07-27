@@ -1,0 +1,31 @@
+# Packaging for the Python bindings.
+#
+# Without this file the extension module could not be built or installed at all:
+# `pip install .` and `maturin build` both need it, so the bindings existed as a
+# crate that nothing could turn into an importable module.
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "openflash"
+description = "Python bindings for the OpenFlash flash memory programmer"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: System :: Hardware",
+    "License :: OSI Approved :: MIT License",
+]
+dynamic = ["version"]
+
+[project.urls]
+Repository = "https://github.com/bobberdolle1/openflash"
+
+[tool.maturin]
+# The crate lives in a workspace, so point maturin at its manifest explicitly.
+manifest-path = "Cargo.toml"
+module-name = "openflash"
+features = ["pyo3/extension-module"]

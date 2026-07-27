@@ -6,7 +6,6 @@ mod command;
 mod config;
 mod device;
 mod flasher;
-mod mock;
 
 use config::AppConfig;
 use device::DeviceManager;
@@ -26,7 +25,6 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            command::enable_mock_mode,
             command::scan_devices,
             command::list_devices,
             command::connect_device,
@@ -34,8 +32,18 @@ pub fn run() {
             command::ping,
             command::read_nand_id,
             command::get_chip_info,
-            command::dump_nand,
-            command::dump_nand_with_progress,
+            command::is_connected,
+            command::identify_chip,
+            command::chip_capacity,
+            command::program_chip,
+            command::erase_chip_range,
+            command::verify_chip,
+            command::process_dump_with_ecc,
+            command::dump_is_clean,
+            command::extract_data_only,
+            command::dump_statistics,
+            command::dump_range,
+            command::dump_range_with_progress,
             command::analyze_dump,
             command::get_config,
             command::set_config,
@@ -57,12 +65,15 @@ pub fn run() {
             command::ai_analyze_dump,
             command::ai_detect_patterns,
             command::ai_get_recommendations,
+            command::ai_compare_dumps,
+            command::ai_search_keys,
+            command::ai_generate_report,
             // Platform commands (v2.3)
             command::get_device_info,
             command::get_platform_info,
-            command::add_network_device,
             command::connect_network_device,
-            command::set_mock_platform,
+            #[cfg(unix)]
+            command::connect_unix_device,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,150 +1,113 @@
-//! OpenFlash GPIO Driver for Raspberry Pi
+//! OpenFlash agent for the Raspberry Pi.
 //!
-//! This is a Linux userspace driver that uses GPIO for flash operations.
-//! Unlike microcontroller firmware, this runs as a daemon on the Pi itself.
+//! A Linux daemon that drives the flash chip through the Pi's own SPI controller
+//! and serves hosts over a Unix socket or TCP:
 //!
-//! Supported boards:
-//! - Raspberry Pi 3B+ (BCM2837B0)
-//! - Raspberry Pi 4 (BCM2711)
-//! - Raspberry Pi 5 (BCM2712)
-//! - Raspberry Pi Zero 2W (BCM2710A1)
+//! ```text
+//! openflash --unix /tmp/openflash.sock detect
+//! openflash --unix /tmp/openflash.sock read -o dump.bin
+//! ```
 //!
-//! Communication: Unix socket or TCP for local/remote control
+//! The protocol handling and the SPI NOR sequencing come from
+//! `openflash-sbc-agent`, shared with the Orange Pi and Banana Pi agents, so
+//! there is one implementation of each rather than three that disagree — which is
+//! how `Ping` ended up as `0x00` on some boards and `0x01` on others.
 
-use log::{info, error, warn};
-use std::io::{Read, Write};
-use std::os::unix::net::{UnixListener, UnixStream};
-use std::path::Path;
+use log::{error, info, warn};
+
+use openflash_sbc_agent::{listen_tcp, listen_unix, Agent, Platform, SpiNor};
 
 mod gpio_nand;
-mod gpio_spi;
-mod protocol;
+mod spi;
 
-/// Protocol version for v2.3.0
-const PROTOCOL_VERSION: u8 = 0x23;
+/// Agent version, reported in the `GetVersion` reply.
+const VERSION: (u8, u8, u8) = (3, 1, 0);
 
-/// Firmware version
-const VERSION: &str = "2.3.0";
-
-/// Platform identifier
-const PLATFORM_ID: u8 = 0x10; // Raspberry Pi
-
-/// Socket path for local communication
+/// Default Unix socket path.
 const SOCKET_PATH: &str = "/tmp/openflash.sock";
 
 fn main() {
     env_logger::init();
-    
-    info!("OpenFlash Raspberry Pi Driver v{}", VERSION);
-    info!("Protocol version: 0x{:02X}", PROTOCOL_VERSION);
-    
-    // Detect Pi model
+
+    info!(
+        "OpenFlash Raspberry Pi agent v{}.{}.{}, protocol v{}",
+        VERSION.0,
+        VERSION.1,
+        VERSION.2,
+        openflash_sbc_agent::PROTOCOL_VERSION
+    );
+
     match detect_pi_model() {
-        Some(model) => info!("Detected: {}", model),
-        None => {
-            error!("Failed to detect Raspberry Pi model");
-            std::process::exit(1);
-        }
+        Some(model) => info!("Detected {model}"),
+        // Not fatal: the agent works on any board with a usable spidev, and
+        // refusing to start on an unrecognised revision would be unhelpful.
+        None => warn!("Could not identify the board from /proc/cpuinfo; continuing anyway"),
     }
-    
-    // Remove old socket if exists
-    if Path::new(SOCKET_PATH).exists() {
-        std::fs::remove_file(SOCKET_PATH).ok();
-    }
-    
-    // Create Unix socket listener
-    let listener = match UnixListener::bind(SOCKET_PATH) {
-        Ok(l) => l,
-        Err(e) => {
-            error!("Failed to bind socket: {}", e);
-            std::process::exit(1);
+
+    // An agent that cannot open the bus still starts and still answers: it
+    // reports no interfaces, so a host learns that once instead of having every
+    // operation fail separately.
+    let bus = match spi::RppalBus::open() {
+        Ok(bus) => bus,
+        Err(error) => {
+            error!("Cannot open the SPI device: {error}");
+            error!("Enable SPI with `raspi-config` and check that /dev/spidev0.0 exists");
+            spi::RppalBus::unavailable(error.to_string())
         }
     };
-    
-    info!("Listening on {}", SOCKET_PATH);
-    
-    // Accept connections
-    for stream in listener.incoming() {
-        match stream {
-            Ok(stream) => {
-                info!("Client connected");
-                handle_client(stream);
-            }
-            Err(e) => {
-                warn!("Connection failed: {}", e);
-            }
-        }
+
+    let mut agent = Agent::new(SpiNor::new(bus), Platform::RaspberryPi, VERSION);
+
+    match std::env::var("OPENFLASH_TCP") {
+        Ok(address) => listen_tcp(&address, &mut agent),
+        Err(_) => listen_unix(SOCKET_PATH, &mut agent),
     }
 }
 
-/// Detect Raspberry Pi model from /proc/cpuinfo
+/// Identify the board from `/proc/cpuinfo`.
 fn detect_pi_model() -> Option<&'static str> {
     let cpuinfo = std::fs::read_to_string("/proc/cpuinfo").ok()?;
-    
-    if cpuinfo.contains("BCM2712") {
-        Some("Raspberry Pi 5")
-    } else if cpuinfo.contains("BCM2711") {
-        Some("Raspberry Pi 4")
-    } else if cpuinfo.contains("BCM2837") {
-        Some("Raspberry Pi 3B+")
-    } else if cpuinfo.contains("BCM2710") {
-        Some("Raspberry Pi Zero 2W")
-    } else {
-        None
-    }
+    model_from_cpuinfo(&cpuinfo)
 }
 
-/// Handle client connection
-fn handle_client(mut stream: UnixStream) {
-    let mut buf = [0u8; 64];
-    
-    loop {
-        match stream.read(&mut buf) {
-            Ok(0) => {
-                info!("Client disconnected");
-                break;
-            }
-            Ok(n) => {
-                let response = process_command(&buf[..n]);
-                if let Err(e) = stream.write_all(&response) {
-                    error!("Write error: {}", e);
-                    break;
-                }
-            }
-            Err(e) => {
-                error!("Read error: {}", e);
-                break;
-            }
-        }
-    }
+fn model_from_cpuinfo(cpuinfo: &str) -> Option<&'static str> {
+    // Ordered so BCM2710 does not match before BCM2711.
+    const MODELS: &[(&str, &str)] = &[
+        ("BCM2712", "Raspberry Pi 5"),
+        ("BCM2711", "Raspberry Pi 4"),
+        ("BCM2837", "Raspberry Pi 3B+"),
+        ("BCM2710", "Raspberry Pi Zero 2W"),
+        ("BCM2835", "Raspberry Pi Zero / 1"),
+    ];
+
+    MODELS
+        .iter()
+        .find(|(soc, _)| cpuinfo.contains(soc))
+        .map(|(_, name)| *name)
 }
 
-/// Process incoming command
-fn process_command(cmd: &[u8]) -> Vec<u8> {
-    if cmd.is_empty() {
-        return vec![0xFF];
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn board_detection_prefers_the_longer_soc_match() {
+        assert_eq!(
+            model_from_cpuinfo("Hardware\t: BCM2711\n"),
+            Some("Raspberry Pi 4")
+        );
+        assert_eq!(
+            model_from_cpuinfo("Hardware\t: BCM2710A1\n"),
+            Some("Raspberry Pi Zero 2W")
+        );
+        assert_eq!(model_from_cpuinfo("Hardware\t: SomethingElse\n"), None);
     }
-    
-    match cmd[0] {
-        // Ping
-        0x00 => vec![0x00, PROTOCOL_VERSION],
-        
-        // Get device info
-        0x01 => {
-            let mut resp = vec![0x01, PLATFORM_ID, PROTOCOL_VERSION];
-            // Capabilities
-            resp.extend_from_slice(&0x0000_001Fu32.to_le_bytes());
-            resp
-        }
-        
-        // Get version
-        0x02 => {
-            let mut resp = vec![0x02];
-            resp.extend_from_slice(VERSION.as_bytes());
-            resp
-        }
-        
-        // Unknown
-        _ => vec![0xFF, cmd[0]],
+
+    /// A host is told this as the firmware version, so it has to correspond to
+    /// the build rather than to a number someone typed once.
+    #[test]
+    fn the_reported_version_matches_the_crate() {
+        let reported = format!("{}.{}.{}", VERSION.0, VERSION.1, VERSION.2);
+        assert_eq!(reported, env!("CARGO_PKG_VERSION"));
     }
 }

@@ -1,0 +1,4 @@
+# Default owner for everything.
+# Teams (@org/team) only resolve inside a GitHub organisation, so a single
+# user handle is used here until the project moves to one.
+* @bobberdolle1

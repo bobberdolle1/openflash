@@ -1,9 +1,14 @@
 [package]
 name = "openflash-gui"
-version = "0.1.0"
-description = "OpenFlash Desktop Application"
-edition = "2021"
-rust-version = "1.77"
+description = "OpenFlash desktop application"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+# Higher than the workspace's 1.85: Tauri pulls in `time`, which requires 1.88.
+# Declared here rather than raising the whole workspace, so the library, the CLI
+# and the board agents keep the lower floor they actually build on.
+rust-version = "1.88"
 
 [lib]
 name = "openflash_gui_lib"
@@ -17,13 +22,14 @@ tauri = { version = "2", features = [] }
 tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-tokio = { version = "1", features = ["full"] }
-openflash-core = { path = "../../core" }
-nusb = "0.1"
+serde = { workspace = true }
+serde_json = { workspace = true }
+# Device access goes through openflash-core, which owns the USB transport; the
+# GUI no longer talks to nusb itself.
+openflash-core = { workspace = true }
 dirs = "5"
 
 [features]
-default = ["custom-protocol"]
+default = ["custom-protocol", "usb"]
 custom-protocol = ["tauri/custom-protocol"]
+usb = ["openflash-core/usb"]

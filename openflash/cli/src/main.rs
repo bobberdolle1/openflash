@@ -18,30 +18,67 @@ use indicatif::{ProgressBar, ProgressStyle};
 use std::path::PathBuf;
 
 mod commands;
+mod connection;
+mod device_commands;
 
 /// OpenFlash - Open-source NAND/eMMC/NOR flash programmer
 #[derive(Parser)]
 #[command(name = "openflash")]
-#[command(author = "OpenFlash Team")]
-#[command(version = "2.0.0")]
+#[command(version)]
 #[command(about = "Command-line interface for flash programming and analysis")]
 #[command(long_about = None)]
-struct Cli {
-    /// Output format (text, json, csv)
+pub struct Cli {
+    /// Output format (text, json)
     #[arg(short = 'f', long, default_value = "text", global = true)]
-    format: String,
+    pub format: String,
 
     /// Verbose output
     #[arg(short, long, global = true)]
-    verbose: bool,
+    pub verbose: bool,
 
-    /// Quiet mode (minimal output)
+    /// Quiet mode: only errors, no banner, no progress bars
     #[arg(short, long, global = true)]
-    quiet: bool,
+    pub quiet: bool,
 
-    /// Device port (auto-detect if not specified)
-    #[arg(short = 'p', long, global = true)]
-    port: Option<String>,
+    /// USB device to use, by serial number or bus-address.
+    ///
+    /// Omit it when exactly one device is attached. Run `openflash scan` to see
+    /// what is connected.
+    #[arg(short = 'd', long, global = true)]
+    pub device: Option<String>,
+
+    /// Reach an SBC agent over TCP, as host:port
+    #[arg(long, global = true, value_name = "HOST:PORT")]
+    pub tcp: Option<String>,
+
+    /// Reach an SBC agent over a Unix socket
+    #[arg(long, global = true, value_name = "PATH")]
+    pub unix: Option<String>,
+
+    /// Run against the in-process emulator with a chip of this many bytes.
+    ///
+    /// No hardware is touched and nothing real is read or written. Intended for
+    /// trying out commands and for the test suite; every emulated run is
+    /// labelled as such on stderr. The size must be a power of two of at least
+    /// 4096 bytes.
+    #[arg(long, global = true, value_name = "BYTES")]
+    pub emulate: Option<u64>,
+
+    /// Back the emulated chip with a file so its contents survive between runs.
+    ///
+    /// Created blank at --emulate bytes (2 MiB by default) if it does not exist.
+    /// Without this, each command gets a freshly erased emulated chip, so a
+    /// write in one invocation is invisible to a read in the next.
+    #[arg(long, global = true, value_name = "PATH", requires = "emulate")]
+    pub emulate_image: Option<PathBuf>,
+
+    /// Per-exchange timeout in milliseconds
+    #[arg(long, global = true, default_value = "5000")]
+    pub timeout_ms: u64,
+
+    /// Do not ask before an operation that modifies the chip
+    #[arg(long, global = true)]
+    pub yes: bool,
 
     #[command(subcommand)]
     command: Commands,
@@ -69,13 +106,9 @@ enum Commands {
         #[arg(short, long)]
         length: Option<String>,
 
-        /// Include OOB/spare area data
+        /// Include OOB/spare area data (NAND interfaces only)
         #[arg(long)]
         oob: bool,
-
-        /// Skip bad blocks
-        #[arg(long, default_value = "true")]
-        skip_bad: bool,
     },
 
     /// Write/program flash chip
@@ -88,38 +121,38 @@ enum Commands {
         #[arg(short, long, default_value = "0")]
         start: String,
 
-        /// Verify after write
-        #[arg(long, default_value = "true")]
+        /// Read the region back and compare it after writing
+        #[arg(long, default_value = "true", action = clap::ArgAction::Set)]
         verify: bool,
 
-        /// Erase before write
-        #[arg(long, default_value = "true")]
+        /// Erase the affected sectors before writing.
+        ///
+        /// Programming can only clear bits, so writing over data that was not
+        /// erased produces the bitwise AND of old and new. Turn this off only
+        /// when the target range is known to be blank.
+        #[arg(long, default_value = "true", action = clap::ArgAction::Set)]
         erase: bool,
-
-        /// Skip bad blocks
-        #[arg(long, default_value = "true")]
-        skip_bad: bool,
     },
 
     /// Erase flash chip (full or partial)
+    ///
+    /// The range must be sector-aligned: erase granularity is a property of the
+    /// chip, and erasing beyond what was asked would destroy neighbouring data.
     Erase {
         /// Start address (hex or decimal)
         #[arg(short, long)]
         start: Option<String>,
 
-        /// Length to erase (default: full chip)
+        /// Length to erase (default: to the end of the chip)
         #[arg(short, long)]
         length: Option<String>,
-
-        /// Force erase without confirmation
-        #[arg(long)]
-        force: bool,
     },
 
     /// Verify flash contents against file
     Verify {
         /// File to verify against
-        #[arg(short, long)]
+        // No short form: -f is the global --format.
+        #[arg(long)]
         file: PathBuf,
 
         /// Start address
@@ -191,7 +224,11 @@ enum Commands {
 
     /// List supported flash chips
     Chips {
-        /// Filter by interface (nand, spi-nand, spi-nor, emmc, ufs)
+        /// Look a part up by its raw id, as hex (e.g. EF4018, or "EC F1 00 95 40")
+        #[arg(long)]
+        id: Option<String>,
+
+        /// Which database to search (nand, spi-nand, spi-nor, emmc); all by default
         #[arg(short, long)]
         interface: Option<String>,
 
@@ -311,7 +348,8 @@ enum Commands {
         output: PathBuf,
 
         /// Number of devices to use
-        #[arg(short, long, default_value = "4")]
+        // No short form: -d is the global --device.
+        #[arg(long, default_value = "4")]
         devices: usize,
 
         /// Chunk size per device
@@ -437,7 +475,8 @@ enum JobAction {
         params: Vec<String>,
 
         /// Specific device ID
-        #[arg(short, long)]
+        // No short form: -d is the global --device.
+        #[arg(long)]
         device: Option<String>,
 
         /// Job priority (low, normal, high, critical)
@@ -489,40 +528,38 @@ enum ProductionAction {
 fn main() {
     let cli = Cli::parse();
 
-    if !cli.quiet {
+    // The banner goes to stderr and only in text mode: printed on stdout it
+    // would sit in front of `--format json` output and make it unparseable.
+    if !cli.quiet && cli.format == "text" {
         print_banner();
     }
 
     let result = match &cli.command {
-        Commands::Scan => commands::scan(&cli),
-        Commands::Detect => commands::detect(&cli),
+        // Commands that talk to hardware.
+        Commands::Scan => device_commands::scan(&cli).map_err(Into::into),
+        Commands::Detect => device_commands::detect(&cli).map_err(Into::into),
+        Commands::Info => device_commands::info(&cli).map_err(Into::into),
         Commands::Read {
             output,
             start,
             length,
             oob,
-            skip_bad,
-        } => commands::read(
-            &cli,
-            output.clone(),
-            start,
-            length.as_deref(),
-            *oob,
-            *skip_bad,
-        ),
+        } => device_commands::read(&cli, output.clone(), start, length.as_deref(), *oob)
+            .map_err(Into::into),
         Commands::Write {
             input,
             start,
             verify,
             erase,
-            skip_bad,
-        } => commands::write(&cli, input.clone(), start, *verify, *erase, *skip_bad),
-        Commands::Erase {
-            start,
-            length,
-            force,
-        } => commands::erase(&cli, start.as_deref(), length.as_deref(), *force),
-        Commands::Verify { file, start } => commands::verify(&cli, file.clone(), start),
+        } => device_commands::write(&cli, input.clone(), start, *verify, *erase, cli.yes)
+            .map_err(Into::into),
+        Commands::Erase { start, length } => {
+            device_commands::erase(&cli, start.as_deref(), length.as_deref(), cli.yes)
+                .map_err(Into::into)
+        }
+        Commands::Verify { file, start } => {
+            device_commands::verify(&cli, file.clone(), start).map_err(Into::into)
+        }
         Commands::Analyze {
             input,
             output,
@@ -534,24 +571,38 @@ fn main() {
             file2,
             output,
         } => commands::compare(&cli, file1.clone(), file2.clone(), output.clone()),
-        Commands::Clone { mode, verify } => commands::clone_chip(&cli, mode, *verify),
-        Commands::Batch {
-            file,
-            stop_on_error,
-        } => commands::batch(&cli, file.clone(), *stop_on_error),
-        Commands::Script { file, args } => commands::script(&cli, file.clone(), args.clone()),
+        Commands::Clone { .. } => commands::not_implemented(
+            "chip-to-chip cloning",
+            "It needs two devices open at once, which the device layer does not do \n\
+             yet. In the meantime: `openflash read -o image.bin` from the source \n\
+             chip, then `openflash write -i image.bin` to the destination.",
+        ),
+        Commands::Batch { .. } => commands::not_implemented(
+            "batch jobs",
+            "The batch job types exist in openflash_core::scripting but no runner \n\
+             executes them. The previous implementation printed a fixed list of \n\
+             three completed jobs without reading the file at all.",
+        ),
+        Commands::Script { .. } => commands::not_implemented(
+            "script execution",
+            "No script interpreter is embedded. Use the Python bindings \n\
+             (pyopenflash) to drive the device from a script.",
+        ),
         Commands::Chips {
+            id,
             interface,
             manufacturer,
             search,
         } => commands::list_chips(
             &cli,
+            id.clone(),
             interface.clone(),
             manufacturer.clone(),
             search.clone(),
         ),
-        Commands::Info => commands::info(&cli),
-        Commands::Interface { interface } => commands::set_interface(&cli, interface),
+        Commands::Interface { interface } => {
+            device_commands::set_interface(&cli, interface).map_err(Into::into)
+        }
         Commands::Config { action } => match action {
             ConfigAction::Show => commands::config_show(&cli),
             ConfigAction::Set { key, value } => commands::config_set(&cli, key, value),
@@ -591,69 +642,47 @@ fn main() {
             }
             SignaturesAction::List => commands::signatures_list(&cli),
         },
-        // v2.0 - Multi-device & Enterprise commands
-        Commands::Server { action } => match action {
-            ServerAction::Start { host, port, config } => {
-                commands::server_start(&cli, host, *port, config.clone())
-            }
-            ServerAction::Stop => commands::server_stop(&cli),
-            ServerAction::Status { url } => commands::server_status(&cli, url.as_deref()),
-        },
-        Commands::Device { action } => match action {
-            DeviceAction::List { url } => commands::device_list(&cli, url.as_deref()),
-            DeviceAction::Add {
-                name,
-                uri,
-                platform,
-                tags,
-            } => commands::device_add(&cli, name, uri, platform, tags.clone()),
-            DeviceAction::Remove { device_id } => commands::device_remove(&cli, device_id),
-        },
-        Commands::Job { action } => match action {
-            JobAction::Submit {
-                job_type,
-                params,
-                device,
-                priority,
-            } => commands::job_submit(
-                &cli,
-                job_type,
-                params.clone(),
-                device.as_deref(),
-                priority.as_deref(),
-            ),
-            JobAction::Status { job_id } => commands::job_status(&cli, *job_id),
-            JobAction::Cancel { job_id } => commands::job_cancel(&cli, *job_id),
-            JobAction::List { status, limit } => {
-                commands::job_list(&cli, status.as_deref(), *limit)
-            }
-        },
-        Commands::ParallelDump {
-            output,
-            devices,
-            chunk_size,
-            merge,
-        } => commands::parallel_dump(&cli, output.clone(), *devices, chunk_size, *merge),
-        Commands::Production { action } => match action {
-            ProductionAction::Start { config, line } => {
-                commands::production_start(&cli, config.clone(), line.as_deref())
-            }
-            ProductionAction::Status { line } => commands::production_status(&cli, line.as_deref()),
-        },
+        // The server, device-farm, job-queue and production-line subsystems
+        // exist only as data types in `openflash_core::server`: there is no HTTP,
+        // WebSocket or gRPC implementation behind them. These commands used to
+        // print a configuration summary and exit successfully, which read as
+        // though a server had started.
+        Commands::Server { .. }
+        | Commands::Device { .. }
+        | Commands::Job { .. }
+        | Commands::ParallelDump { .. }
+        | Commands::Production { .. } => commands::not_implemented(
+            "server mode",
+            "openflash_core::server defines the REST, WebSocket and gRPC types but \n\
+             no server implements them yet. Track it at \n\
+             https://github.com/bobberdolle1/openflash/issues",
+        ),
     };
 
-    if let Err(e) = result {
-        if !cli.quiet {
-            eprintln!("{} {}", "Error:".red().bold(), e);
+    if let Err(error) = result {
+        // Always reported, including under --quiet: that flag suppresses progress
+        // and summaries, not failures. Silencing the reason for a failed flash
+        // and leaving only the exit status is how a script ends up logging
+        // nothing useful about why a chip was not written.
+        eprintln!("{} {error}", "Error:".red().bold());
+
+        // Print the chain, so a verification failure shows the offset and a USB
+        // failure shows the underlying errno rather than just the top layer.
+        let mut source = error.source();
+        while let Some(cause) = source {
+            eprintln!("  caused by: {cause}");
+            source = cause.source();
         }
+
         std::process::exit(1);
     }
 }
 
 fn print_banner() {
-    println!(
+    eprintln!(
         "{}",
-        r#"
+        format!(
+            r#"
    ____                   _____ _           _     
   / __ \                 |  ___| |         | |    
  | |  | |_ __   ___ _ __ | |_  | | __ _ ___| |__  
@@ -661,8 +690,10 @@ fn print_banner() {
  | |__| | |_) |  __/ | | | |   | | (_| \__ \ | | |
   \____/| .__/ \___|_| |_\_|   |_|\__,_|___/_| |_|
         | |                                       
-        |_|   v2.0.0 - Multi-device & Enterprise
-"#
+        |_|   v{}
+"#,
+            env!("CARGO_PKG_VERSION")
+        )
         .cyan()
     );
 }
@@ -704,5 +735,39 @@ pub fn format_size(bytes: u64) -> String {
         format!("{:.2} KB", bytes as f64 / KB as f64)
     } else {
         format!("{} B", bytes)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Cli;
+    use clap::CommandFactory;
+
+    /// clap validates argument definitions only when a command is actually
+    /// parsed, so a duplicate short flag panics at runtime for whichever
+    /// subcommand carries it — `verify` was unusable because its `--file` also
+    /// claimed `-f`, which the global `--format` already had. This asserts the
+    /// whole tree up front.
+    #[test]
+    fn the_argument_definitions_are_internally_consistent() {
+        Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn parsing_an_address_accepts_decimal_and_hex() {
+        assert_eq!(super::parse_address("0"), Ok(0));
+        assert_eq!(super::parse_address("4096"), Ok(4096));
+        assert_eq!(super::parse_address("0x1000"), Ok(4096));
+        assert_eq!(super::parse_address("0X1000"), Ok(4096));
+        assert!(super::parse_address("nonsense").is_err());
+        assert!(super::parse_address("0xZZ").is_err());
+    }
+
+    #[test]
+    fn sizes_are_formatted_in_the_largest_sensible_unit() {
+        assert_eq!(super::format_size(512), "512 B");
+        assert_eq!(super::format_size(2048), "2.00 KB");
+        assert_eq!(super::format_size(2 * 1024 * 1024), "2.00 MB");
+        assert_eq!(super::format_size(3 * 1024 * 1024 * 1024), "3.00 GB");
     }
 }

@@ -680,6 +680,12 @@ impl RootfsExtractor {
         self
     }
 
+    /// Report Unix mode, uid and gid on extracted entries.
+    pub fn with_permissions(mut self, preserve: bool) -> Self {
+        self.preserve_permissions = preserve;
+        self
+    }
+
     /// Detect filesystem type at offset
     pub fn detect_filesystem(&self, data: &[u8], offset: usize) -> Option<FilesystemType> {
         if offset + 4 > data.len() {
@@ -780,49 +786,76 @@ impl RootfsExtractor {
             data[40], data[41], data[42], data[43], data[44], data[45], data[46], data[47],
         ]);
 
-        // Simulated extraction - in real implementation would parse full FS
-        let files = self.generate_mock_files(inode_count as usize);
-        let total_dirs = files.iter().filter(|f| f.is_dir).count();
-        let total_files = files.len() - total_dirs;
-
+        // The superblock above is really parsed; the directory tree is not.
+        // Listing it means decompressing the metadata blocks, which needs a
+        // SquashFS reader and a decompressor for whichever of gzip, LZO, LZ4,
+        // XZ or Zstd the image was built with.
+        //
+        // This used to call `generate_mock_files`, which returned a fixed list
+        // -- /bin/busybox, /etc/passwd, /etc/shadow -- for every image. In a tool
+        // used for recovery and for security research, inventing paths that look
+        // exactly like real findings is the worst thing it could do, so the
+        // listing is now empty and says why.
         Ok(RootfsResult {
             fs_type: FilesystemType::SquashFS,
             offset: 0,
             size: bytes_used,
-            total_files,
-            total_dirs,
-            files,
-            warnings: Vec::new(),
+            total_files: 0,
+            total_dirs: 0,
+            files: Vec::new(),
+            warnings: vec![format!(
+                "superblock reports {inode_count} inodes and {bytes_used} bytes used; \
+                 listing the contents needs a SquashFS parser, which is not implemented"
+            )],
         })
     }
 
+    /// JFFS2 is a log of nodes rather than a tree with a superblock, so there is
+    /// nothing to read without walking it. Nothing is claimed about the contents.
     fn extract_jffs2(&self, data: &[u8]) -> AiAdvancedResult<RootfsResult> {
-        let files = self.generate_mock_files(50);
-        let total_dirs = files.iter().filter(|f| f.is_dir).count();
-
         Ok(RootfsResult {
             fs_type: FilesystemType::Jffs2,
             offset: 0,
             size: data.len() as u64,
-            total_files: files.len() - total_dirs,
-            total_dirs,
-            files,
-            warnings: Vec::new(),
+            total_files: 0,
+            total_dirs: 0,
+            files: Vec::new(),
+            warnings: vec![
+                "JFFS2 listing is not implemented: the image is a log of nodes that \
+                 has to be replayed to recover the directory tree"
+                    .into(),
+            ],
         })
     }
 
     fn extract_cramfs(&self, data: &[u8]) -> AiAdvancedResult<RootfsResult> {
-        let files = self.generate_mock_files(30);
-        let total_dirs = files.iter().filter(|f| f.is_dir).count();
+        // The CramFS superblock carries a file count at offset 0x20 and a volume
+        // name at 0x30, both plain little-endian fields, so those are read. The
+        // inode table that would give paths is not walked.
+        let files_in_image = if data.len() >= 0x24 {
+            Some(u32::from_le_bytes([
+                data[0x20], data[0x21], data[0x22], data[0x23],
+            ]))
+        } else {
+            None
+        };
+
+        let warning = match files_in_image {
+            Some(count) => format!(
+                "superblock reports {count} files; listing them needs a CramFS \
+                 parser, which is not implemented"
+            ),
+            None => "CramFS image is too short to hold a superblock".into(),
+        };
 
         Ok(RootfsResult {
             fs_type: FilesystemType::CramFS,
             offset: 0,
             size: data.len() as u64,
-            total_files: files.len() - total_dirs,
-            total_dirs,
-            files,
-            warnings: Vec::new(),
+            total_files: 0,
+            total_dirs: 0,
+            files: Vec::new(),
+            warnings: vec![warning],
         })
     }
 
@@ -840,37 +873,6 @@ impl RootfsExtractor {
             files: Vec::new(),
             warnings: vec!["Generic extraction not fully implemented".into()],
         })
-    }
-
-    fn generate_mock_files(&self, count: usize) -> Vec<ExtractedFile> {
-        let common_paths = [
-            ("/", true, 0o755),
-            ("/bin", true, 0o755),
-            ("/etc", true, 0o755),
-            ("/lib", true, 0o755),
-            ("/usr", true, 0o755),
-            ("/var", true, 0o755),
-            ("/bin/busybox", false, 0o755),
-            ("/etc/passwd", false, 0o644),
-            ("/etc/shadow", false, 0o600),
-            ("/etc/init.d/rcS", false, 0o755),
-        ];
-
-        common_paths
-            .iter()
-            .take(count.min(common_paths.len()))
-            .map(|(path, is_dir, mode)| ExtractedFile {
-                path: path.to_string(),
-                size: if *is_dir { 0 } else { 1024 },
-                mode: *mode,
-                uid: 0,
-                gid: 0,
-                is_dir: *is_dir,
-                is_symlink: false,
-                symlink_target: None,
-                data: None,
-            })
-            .collect()
     }
 }
 
@@ -1006,6 +1008,14 @@ impl VulnScanner {
             check_credentials: true,
             check_weak_crypto: true,
         }
+    }
+
+    /// Version of the CVE signature set this scanner matches against.
+    ///
+    /// Reported alongside findings so a scan result can be tied to the data it
+    /// was produced from.
+    pub fn db_version(&self) -> &str {
+        &self.db_version
     }
 
     pub fn with_credentials_check(mut self, check: bool) -> Self {

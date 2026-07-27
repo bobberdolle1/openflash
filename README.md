@@ -1,993 +1,289 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/openflash/openflash/main/.github/assets/logo-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/openflash/openflash/main/.github/assets/logo.svg">
-  <img alt="OpenFlash" src="https://raw.githubusercontent.com/openflash/openflash/main/.github/assets/logo.svg" width="100%">
-</picture>
-
 <div align="center">
 
-```
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║   ██████╗ ██████╗ ███████╗███╗   ██╗███████╗██╗      █████╗ ███████╗██╗  ██╗ ║
-║  ██╔═══██╗██╔══██╗██╔════╝████╗  ██║██╔════╝██║     ██╔══██╗██╔════╝██║  ██║ ║
-║  ██║   ██║██████╔╝█████╗  ██╔██╗ ██║█████╗  ██║     ███████║███████╗███████║ ║
-║  ██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║██╔══╝  ██║     ██╔══██║╚════██║██╔══██║ ║
-║  ╚██████╔╝██║     ███████╗██║ ╚████║██║     ███████╗██║  ██║███████║██║  ██║ ║
-║   ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝╚═╝     ╚══════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝ ║
-║                                                                              ║
-║                    $4 → Professional Flash Programmer                        ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-```
+# OpenFlash
 
-<br>
+**An open-source flash memory programmer built from a cheap microcontroller.**
 
-**[ [English](#-what-is-openflash) · [Русский](#-что-такое-openflash) ]**
+[![CI](https://github.com/bobberdolle1/openflash/actions/workflows/ci.yml/badge.svg)](https://github.com/bobberdolle1/openflash/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/Rust-1.85%2B-orange.svg?logo=rust)](https://www.rust-lang.org/)
 
-<br>
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
-[![Rust](https://img.shields.io/badge/Rust-1.70+-orange.svg?style=for-the-badge&logo=rust)](https://www.rust-lang.org/)
-[![Platforms](https://img.shields.io/badge/Platforms-11-blue.svg?style=for-the-badge)](#-platforms)
-[![Chips](https://img.shields.io/badge/Chips-230+-green.svg?style=for-the-badge)](#-supported-chips)
+[English](#what-it-is) · [Русский](#по-русски)
 
 </div>
 
 ---
 
-<br>
+## What it is
 
-<!-- ═══════════════════════════════════════════════════════════════════════════ -->
-<!-- ███████╗███╗   ██╗ ██████╗ ██╗     ██╗███████╗██╗  ██╗                      -->
-<!-- ██╔════╝████╗  ██║██╔════╝ ██║     ██║██╔════╝██║  ██║                      -->
-<!-- █████╗  ██╔██╗ ██║██║  ███╗██║     ██║███████╗███████║                      -->
-<!-- ██╔══╝  ██║╚██╗██║██║   ██║██║     ██║╚════██║██╔══██║                      -->
-<!-- ███████╗██║ ╚████║╚██████╔╝███████╗██║███████║██║  ██║                      -->
-<!-- ╚══════╝╚═╝  ╚═══╝ ╚═════╝ ╚══════╝╚═╝╚══════╝╚═╝  ╚═╝                      -->
-<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+Commercial flash programmers cost hundreds to thousands. OpenFlash aims at the
+same job — read, erase and write the flash chip out of a router, a TV, a car ECU
+— from a $4 development board, a few jumper wires and open source software.
 
-# 🇬🇧 ENGLISH
+Three parts:
 
-<br>
+- **`openflash`**, a command-line tool that identifies a chip, dumps it,
+  programs it and verifies the result.
+- **A desktop application** (Tauri + React) over the same core.
+- **Device firmware** for the board wired to the chip.
 
-## 💀 What is OpenFlash?
+Plus a library that analyses dumps you already have: filesystem and signature
+detection, ECC, entropy and pattern analysis, firmware unpacking.
 
-<table>
-<tr>
-<td width="60%">
+## Honest status
 
-**The Problem:**
-```
-Commercial flash programmers = $200-2000
-Look like they escaped from 2003
-Closed source, paid updates, Windows XP vibes
-```
+This section is deliberately first, because a table of supported boards is easy
+to write and hard to earn.
 
-**The Solution:**
-```
-OpenFlash = $4 microcontroller + jumper wires
-Modern cross-platform app
-Open source, free forever, AI-powered
-```
+**Works end to end today:** SPI NOR flash, over a Raspberry Pi, Orange Pi or
+Banana Pi running the OpenFlash agent. Identify, dump, erase, program, verify —
+all covered by tests that run in CI. The three agents share one implementation,
+so they cannot drift apart.
 
-</td>
-<td width="40%">
+**Works without hardware:** the built-in emulator implements the device side of
+the protocol with real flash semantics, so you can try every command and see
+exactly what the tools do.
 
-```
-     ┌─────────────┐
-     │  DEAD       │
-     │  ROUTER     │
-     │  ┌───────┐  │
-     │  │ NAND  │◄─┼──── What's inside?
-     │  └───────┘  │
-     └─────────────┘
-           │
-           ▼
-     ┌─────────────┐
-     │  OpenFlash  │
-     │  ═══════════│
-     │  SECRETS    │
-     │  REVEALED   │
-     └─────────────┘
-```
+**Does not work yet:** the microcontroller firmware. The RP2040, STM32 and ESP32
+drivers are substantial — thousands of lines of PIO, FSMC and SPI code — but none
+of them currently builds: they pin dependency versions that no longer resolve and
+have no target configuration, linker script or runner. The RP2350 and Arduino
+GIGA directories are stubs. Parallel NAND, SPI NAND, eMMC and UFS have host-side
+chip databases and parsers, but no device firmware that can drive them.
 
-</td>
-</tr>
-</table>
+`docs/PLATFORMS.md` gives the per-board, per-interface detail, including line
+counts and what specifically is missing. Nothing in this repository claims a
+platform works because a directory for it exists.
 
-<br>
+**Chip database:** 207 parts with exact entries — 70 SPI NOR, 66 parallel NAND,
+45 SPI NAND, 26 eMMC — plus capacity-derived fallbacks for unknown ids. Being in
+the database means OpenFlash can name the part and its geometry; whether it can
+*read* it depends on the interface, above.
 
-## 🎯 Why OpenFlash?
-
-```
-┌────────────────────────────────────────────────────────────────────────────────┐
-│                                                                                │
-│   COMMERCIAL PROGRAMMER              vs              OPENFLASH                 │
-│   ══════════════════════                            ══════════                 │
-│                                                                                │
-│   💰 $200 - $2000                                   💰 $4 - $30                │
-│   🖥️  Windows XP era UI                             🖥️  Modern React + Tauri   │
-│   📦 Pay for chip database                          📦 230+ chips FREE         │
-│   🔄 Pay for updates                                🔄 Free forever            │
-│   🤖 No AI                                          🤖 AI-powered analysis     │
-│   🔒 Closed source                                  🔓 MIT License             │
-│   📅 Looks like 2003                                📅 Looks like 2025         │
-│                                                                                │
-└────────────────────────────────────────────────────────────────────────────────┘
-```
-
-<br>
-
-## 🔌 Platforms
-
-<table>
-<tr>
-<th colspan="5" align="center">⚡ MICROCONTROLLERS</th>
-</tr>
-<tr>
-<th>Platform</th>
-<th>Price</th>
-<th>Speed</th>
-<th>Best For</th>
-<th>Special</th>
-</tr>
-<tr>
-<td>🍓 <b>Raspberry Pi Pico</b></td>
-<td align="center">~$4</td>
-<td align="center">██░░░</td>
-<td>Beginners</td>
-<td>PIO magic</td>
-</tr>
-<tr>
-<td>🍓 <b>Raspberry Pi Pico 2</b></td>
-<td align="center">~$5</td>
-<td align="center">███░░</td>
-<td>Enthusiasts</td>
-<td>NV-DDR support</td>
-</tr>
-<tr>
-<td>🖤 <b>STM32F4 Black Pill</b></td>
-<td align="center">~$5</td>
-<td align="center">███░░</td>
-<td>Best value</td>
-<td>168MHz Cortex-M4</td>
-</tr>
-<tr>
-<td>⚡ <b>Teensy 4.0 / 4.1</b></td>
-<td align="center">~$20-30</td>
-<td align="center">█████</td>
-<td>Speed demons</td>
-<td><b>USB HS 480Mbps!</b></td>
-</tr>
-<tr>
-<td>🔵 <b>Arduino GIGA R1</b></td>
-<td align="center">~$60</td>
-<td align="center">████░</td>
-<td>Enterprise</td>
-<td>WiFi + Hardware ECC</td>
-</tr>
-<tr>
-<td>📶 <b>ESP32</b></td>
-<td align="center">~$4</td>
-<td align="center">██░░░</td>
-<td>Wireless</td>
-<td>WiFi operation</td>
-</tr>
-<tr>
-<td>💙 <b>STM32F1 Blue Pill</b></td>
-<td align="center">~$2</td>
-<td align="center">█░░░░</td>
-<td>Ultra budget</td>
-<td>Cheapest option</td>
-</tr>
-</table>
-
-<table>
-<tr>
-<th colspan="5" align="center">🖥️ SINGLE BOARD COMPUTERS</th>
-</tr>
-<tr>
-<th>Platform</th>
-<th>Price</th>
-<th>Speed</th>
-<th>Best For</th>
-<th>Special</th>
-</tr>
-<tr>
-<td>🥧 <b>Raspberry Pi 4/5</b></td>
-<td align="center">~$35-75</td>
-<td align="center">████░</td>
-<td>Headless server</td>
-<td>Native GPIO</td>
-</tr>
-<tr>
-<td>🍊 <b>Orange Pi</b></td>
-<td align="center">~$15-50</td>
-<td align="center">███░░</td>
-<td>Budget SBC</td>
-<td>Allwinner/Rockchip</td>
-</tr>
-<tr>
-<td>🍌 <b>Banana Pi</b></td>
-<td align="center">~$15-35</td>
-<td align="center">███░░</td>
-<td>RISC-V fans</td>
-<td>SpacemiT K1 RISC-V!</td>
-</tr>
-</table>
-
-<br>
-
-## 💾 Supported Chips
-
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                                                                              │
-│  PARALLEL NAND ████████████████████████████████████████████████████  60+     │
-│  Samsung • Micron • SK Hynix • Kioxia • Macronix • Winbond                   │
-│                                                                              │
-│  SPI NOR ████████████████████████████████████████████████████████████  75+   │
-│  Winbond • GigaDevice • Macronix • Micron • ISSI • XMC • EON                 │
-│                                                                              │
-│  SPI NAND ██████████████████████████████████████████████████████  55+        │
-│  GigaDevice • Winbond • Micron • Macronix • Kioxia • XTX • Foresee           │
-│                                                                              │
-│  eMMC ████████████████████████████████████████  40+                          │
-│  Samsung • Micron • SK Hynix • SanDisk • Kingston                            │
-│                                                                              │
-│  UFS ██████████  10+  (detection)                                            │
-│                                                                              │
-│  ═══════════════════════════════════════════════════════════════════════     │
-│  TOTAL: 230+ CHIPS                                                           │
-│                                                                              │
-└──────────────────────────────────────────────────────────────────────────────┘
-```
-
-<br>
-
-## ✨ Features
-
-<table>
-<tr>
-<td width="50%">
-
-### 🔧 Core Operations
-```
-READ     ████████████████████  ✓
-WRITE    ████████████████████  ✓
-ERASE    ████████████████████  ✓
-VERIFY   ████████████████████  ✓
-CLONE    ████████████████████  ✓
-```
-
-### 🛡️ Error Correction
-```
-Hamming    ✓  1-bit correction
-BCH-4      ✓  4-bit correction
-BCH-8      ✓  8-bit correction
-BCH-16     ✓  16-bit correction
-BCH-24     ✓  24-bit correction
-```
-
-</td>
-<td width="50%">
-
-### 🤖 AI Analysis
-```
-🔍 Pattern Detection
-   Encrypted │ Compressed │ Executable
-
-📁 Filesystem Detection
-   SquashFS │ UBIFS │ JFFS2 │ ext4 │ FAT
-
-�  Key Search
-   AES-128/192/256 keys in dumps
-
-📊 Wear Analysis
-   Remaining chip life estimation
-
-🗺️ Memory Map
-   Visual partition layout
-```
-
-</td>
-</tr>
-</table>
-
-### 🚀 Advanced Features
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                                                                             │
-│  v1.x  ✅ Foundation                                                        │
-│        NAND • SPI • eMMC • AI analysis • Python API • CLI                   │
-│                                                                             │
-│  v2.x  ✅ Scale                                                             │
-│        11 platforms • REST API • Device farm • Production line              │
-│        Logic analyzer • JTAG/SWD • OpenFlash PCB                            │
-│                                                                             │
-│  v3.0  ✅ Cloud  ◄─── YOU ARE HERE                                          │
-│        ☁️  Sync dumps across devices                                         │
-│        👥 Team collaboration                                                 │
-│        🌍 Community chip database                                            │
-│        🔄 AI model updates OTA                                               │
-│        🏢 Enterprise support                                                 │
-│                                                                             │
-│  v3.x  🔜 Coming                                                            │
-│        FPGA support • Forensics tools • More chips                          │
-│                                                                             │
-│  v4.0  🔮 Future                                                            │
-│        WebAssembly • Distributed dumping • Real-time collab                 │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-<br>
-
-## 🏎️ Speed Comparison
-
-```
-                           1GB DUMP TIME
-                           ═════════════
-
-Teensy 4.1 (USB HS)    ████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  3-5 min
-Arduino GIGA           ████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  ~10 min
-Raspberry Pi 4         ██████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  ~12 min
-STM32F4                ████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░  ~25 min
-RP2350                 ████████████████████████░░░░░░░░░░░░░░░░░░░░░░  ~30 min
-RP2040                 ████████████████████████████████████░░░░░░░░░░  ~45 min
-ESP32                  ██████████████████████████████████████░░░░░░░░  ~50 min
-```
-
-<br>
-
-## 🛠️ Quick Start
-
-### 1️⃣ Try Without Hardware
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                                                                 │
-│   Open App  →  Click "Mock"  →  Scan  →  Connect  →  Dump      │
-│                                                                 │
-│   Explore all features with simulated data!                     │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### 2️⃣ Minimal Hardware
-
-```
-TOTAL COST: ~$6
-
-┌──────────────────────┐     ┌──────────────────────┐
-│  Raspberry Pi Pico   │     │  Jumper Wires        │
-│  ~$4                 │  +  │  ~$2                 │
-└──────────────────────┘     └──────────────────────┘
-```
-
-### 3️⃣ Wiring (SPI Flash)
-
-```
-        PICO                          FLASH CHIP
-    ┌──────────┐                    ┌──────────────┐
-    │          │                    │              │
-    │     GP16 ├────────────────────┤ DO (MISO)    │
-    │     GP17 ├────────────────────┤ CS#          │
-    │     GP18 ├────────────────────┤ CLK          │
-    │     GP19 ├────────────────────┤ DI (MOSI)    │
-    │      3V3 ├────────────────────┤ VCC          │
-    │      GND ├────────────────────┤ GND          │
-    │          │                    │              │
-    └──────────┘                    └──────────────┘
-```
-
-### 4️⃣ Read!
-
-```
-Open App  →  Scan  →  Connect  →  Detect Chip  →  Dump  →  🎉
-```
-
-<br>
-
-## 💻 Automation
-
-<table>
-<tr>
-<td width="50%">
-
-### Python API
-```python
-import openflash
-
-# Connect
-device = openflash.connect()
-chip = device.detect()
-
-# Read
-dump = device.read_full()
-dump.save("firmware.bin")
-
-# Analyze
-analysis = openflash.ai.analyze(dump)
-print(f"Quality: {analysis.quality_score:.0%}")
-print(f"Filesystem: {analysis.filesystem}")
-```
-
-</td>
-<td width="50%">
-
-### CLI
-```bash
-# Scan for devices
-openflash scan
-
-# Read chip
-openflash read -o dump.bin
-
-# AI analysis
-openflash analyze dump.bin
-
-# Write with verification
-openflash write -i firmware.bin --verify
-
-# Batch processing
-openflash batch jobs.toml
-```
-
-</td>
-</tr>
-</table>
-
-<br>
-
-## 🏗️ Build from Source
+## Try it now, without hardware
 
 ```bash
-# Prerequisites: Rust 1.70+, Node 18+
-
-git clone https://github.com/openflash/openflash.git
+git clone https://github.com/bobberdolle1/openflash
 cd openflash/openflash
+cargo build --release -p openflash-cli
 
-# ┌─────────────────────────────────────────────────────────────┐
-# │  GUI (Tauri + React)                                        │
-# └─────────────────────────────────────────────────────────────┘
-cd gui && npm i && cargo tauri dev
+# A 2 MiB emulated SPI NOR chip, kept in a file between commands
+alias of='./target/release/openflash --emulate 2097152 --emulate-image /tmp/chip.bin'
 
-# ┌─────────────────────────────────────────────────────────────┐
-# │  CLI                                                        │
-# └─────────────────────────────────────────────────────────────┘
-cargo build -p openflash-cli --release
-
-# ┌─────────────────────────────────────────────────────────────┐
-# │  Firmware (pick your platform)                              │
-# └─────────────────────────────────────────────────────────────┘
-
-# RP2040 (Raspberry Pi Pico)
-cd firmware/rp2040
-rustup target add thumbv6m-none-eabi
-cargo build --release --target thumbv6m-none-eabi
-
-# RP2350 (Raspberry Pi Pico 2)
-cd firmware/rp2350
-rustup target add thumbv8m.main-none-eabihf
-cargo build --release --target thumbv8m.main-none-eabihf
-
-# Teensy 4.x (USB High Speed!)
-cd firmware/teensy4
-rustup target add thumbv7em-none-eabihf
-cargo build --release --target thumbv7em-none-eabihf
+of detect
+of --yes write -i some-firmware.bin
+of read -o dump.bin
+of verify --file some-firmware.bin
 ```
 
-<br>
+Every emulated run says so on stderr. The emulator programs like real flash —
+bits can only be cleared, a program wrapping a page boundary wraps within the
+page, an erase needs the write-enable latch — so a mistake in the tooling shows
+up here rather than on your chip.
 
-## 📚 Documentation
+## With hardware
 
-| | |
-|:---:|---|
-| 📖 | **[Wiki](openflash.wiki/)** — Full documentation |
-| 🆕 | **[Beginner's Guide](openflash.wiki/Beginners-Guide.md)** — Never used a programmer? |
-| 🔌 | **[Hardware Setup](openflash.wiki/Hardware-Setup.md)** — Wiring diagrams |
-| 📋 | **[Supported Chips](openflash.wiki/Supported-Chips.md)** — 230+ chips |
-| 🔧 | **[Troubleshooting](openflash.wiki/Troubleshooting.md)** — When things break |
-| ❓ | **[FAQ](openflash.wiki/FAQ.md)** — Common questions |
+Today that means a Raspberry Pi, Orange Pi or Banana Pi with the agent running:
 
-<br>
+```bash
+# On the board (pick the crate for yours)
+cargo run --release -p openflash-firmware-raspberry-pi
+cargo run --release -p openflash-firmware-orange-pi
+cargo run --release -p openflash-firmware-banana-pi
+
+# On your machine
+openflash --unix /tmp/openflash.sock detect
+openflash --unix /tmp/openflash.sock read -o dump.bin
+```
+
+Set `OPENFLASH_TCP=0.0.0.0:9999` on the board to serve over the network instead,
+then use `openflash --tcp board.local:9999`.
+
+Wiring is in `docs/HARDWARE_GUIDE.md`. USB devices are found automatically once
+firmware exists that speaks the current protocol; `openflash scan` lists what is
+attached.
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `scan` | list attached devices |
+| `info` | what the device reports about itself |
+| `detect` | read the chip id and look it up |
+| `read -o FILE` | dump the chip, or a range with `--start`/`--length` |
+| `write -i FILE` | erase the affected sectors, program, verify |
+| `erase` | erase a sector-aligned range and confirm it is blank |
+| `verify --file FILE` | read the chip back and compare |
+| `analyze FILE` | filesystems, entropy, patterns, anomalies |
+| `compare A B` | byte-level diff with a report |
+| `unpack`, `rootfs`, `vulnscan` | offline firmware analysis; `rootfs` locates and carves filesystem images but does not list their contents |
+| `chips --id EF4018` | look a part up in the chip database by its id |
+
+`read` and `verify` open the device read-only, so a dump cannot modify the chip
+it is reading. `write` and `erase` ask before touching real hardware unless you
+pass `--yes`. Commands whose subsystem is not implemented say so and exit
+non-zero rather than printing a success message.
+
+## Safety
+
+Flash programming destroys data when it goes wrong, so the tools are built to
+fail loudly:
+
+- every transfer is CRC-protected in both directions; corruption is reported,
+  never returned as if it were chip contents
+- a reply that does not match the command that was sent is an error, not data
+- programming erases first by default, and a sector the write only partially
+  covers is read out and rewritten so neighbouring data survives
+- a write is verified by reading it back; a mismatch reports the exact offset
+- an erase range must be sector-aligned, because erasing more than asked would
+  destroy data the user did not name
+
+## Build
+
+```bash
+cd openflash
+cargo test            # protocol, core, CLI, GUI backend, Pi agent
+cargo clippy --all-targets -- -D warnings
+```
+
+The desktop app needs Node and, on Linux, webkit:
+
+```bash
+sudo apt install libwebkit2gtk-4.1-dev libudev-dev
+cd gui && npm ci && npm run tauri dev
+```
+
+## Layout
+
+```
+openflash/
+├── protocol/   wire format shared by host and firmware (no_std)
+├── core/       transport, device operations, emulator, chip databases, analysis
+├── cli/        the openflash command
+├── gui/        Tauri + React desktop app
+├── pyopenflash/ Python bindings
+├── firmware/   per-board device code; sbc-agent is shared by the three SBCs
+└── docs/       PROTOCOL.md, PLATFORMS.md, HARDWARE_GUIDE.md
+```
+
+`docs/PROTOCOL.md` is the wire format. Read it before writing firmware — the
+opcode table lives in one crate and a test fails the build if a firmware
+reintroduces its own.
+
+## Contributing
+
+The most valuable contributions right now, in order:
+
+1. **Get one microcontroller firmware building and talking.** All seven need a
+   USB stack, a framed dispatcher and target configuration; the Teensy 4's
+   opcode table is the closest to correct, but its USB layer is a stub that
+   never receives anything, so it is not the small job it looks like.
+   `docs/PLATFORMS.md` says what each one is missing.
+2. **Hardware-in-the-loop testing.** A self-hosted runner with a Pico and a
+   W25Q part would let CI prove a real read, which is the only thing that
+   really protects against regressions here.
+3. **Chip database entries.** Add a part, add a test.
+4. **Parallel NAND on an SBC agent.** The scaffold is there; it needs the
+   address cycles. Note that Linux GPIO timing makes this hard — the
+   microcontrollers are the better home for it.
+5. **Controller-specific BCH layouts.** The BCH codec itself is correct now, but
+   it uses its own bit order. Reading the ECC a particular NAND controller wrote
+   means matching that controller's layout and descrambling.
+
+`CONTRIBUTING.md` has the process. Please do not add a platform or a feature to
+the documentation before the code behind it works — the project has been through
+that once already, and digging out was most of the work in `docs/PLATFORMS.md`.
+
+## Licence
+
+MIT. See [LICENSE](LICENSE).
 
 ---
 
-<br>
+## По-русски
 
-<!-- ═══════════════════════════════════════════════════════════════════════════ -->
-<!-- ██████╗ ██╗   ██╗███████╗███████╗██╗  ██╗██╗██╗                             -->
-<!-- ██╔══██╗██║   ██║██╔════╝██╔════╝██║ ██╔╝██║██║                             -->
-<!-- ██████╔╝██║   ██║███████╗███████╗█████╔╝ ██║██║                             -->
-<!-- ██╔══██╗██║   ██║╚════██║╚════██║██╔═██╗ ██║██║                             -->
-<!-- ██║  ██║╚██████╔╝███████║███████║██║  ██╗██║██║                             -->
-<!-- ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚══════╝╚═╝  ╚═╝╚═╝╚═╝                             -->
-<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+**OpenFlash — открытый программатор флеш-памяти на дешёвой отладочной плате.**
 
-# 🇷🇺 РУССКИЙ
+Задача та же, что у коммерческих программаторов за $200–2000: прочитать,
+стереть и записать флеш-чип из роутера, телевизора или блока управления
+автомобилем. Только на плате за $4, нескольких проводах и открытом коде.
 
-<br>
+### Честный статус
 
-## 💀 Что такое OpenFlash?
+**Работает полностью:** SPI NOR через Raspberry Pi, Orange Pi или Banana Pi с
+агентом OpenFlash — определение чипа, дамп, стирание, запись, проверка. Всё
+покрыто тестами в CI. У трёх агентов одна общая реализация, поэтому разъехаться
+они не могут.
 
-<table>
-<tr>
-<td width="60%">
+**Работает без железа:** встроенный эмулятор реализует устройство со настоящей
+семантикой флеш-памяти, так что все команды можно попробовать и увидеть, что
+именно делает инструмент.
 
-**Проблема:**
-```
-Профессиональные программаторы = $200-2000
-Выглядят как из 2003 года
-Закрытый код, платные обновления, Windows XP вайбы
-```
+**Пока не работает:** прошивки для микроконтроллеров. Драйверы для RP2040, STM32
+и ESP32 объёмные — тысячи строк кода PIO, FSMC и SPI — но ни один сейчас не
+собирается: зафиксированы версии зависимостей, которые больше не разрешаются, и
+нет ни целевой платформы, ни линкер-скрипта. Каталоги RP2350 и Arduino GIGA —
+заглушки. Для parallel NAND, SPI NAND, eMMC и UFS есть базы чипов и парсеры на
+стороне хоста, но нет прошивки, которая умеет с ними работать.
 
-**Решение:**
-```
-OpenFlash = микроконтроллер за $4 + провода
-Современное кроссплатформенное приложение
-Open source, бесплатно навсегда, с AI
-```
+Подробности по каждой плате и интерфейсу — в `docs/PLATFORMS.md`. Ни одна
+платформа здесь не считается поддержанной только потому, что для неё есть
+каталог.
 
-</td>
-<td width="40%">
+**База чипов:** 207 моделей с точными записями (70 SPI NOR, 66 parallel NAND,
+45 SPI NAND, 26 eMMC) плюс определение по байту ёмкости для незнакомых ID.
+Наличие в базе означает, что OpenFlash назовёт чип и его геометрию; сможет ли
+он его прочитать — зависит от интерфейса, см. выше.
 
-```
-     ┌─────────────┐
-     │  МЁРТВЫЙ    │
-     │  РОУТЕР     │
-     │  ┌───────┐  │
-     │  │ NAND  │◄─┼──── Что внутри?
-     │  └───────┘  │
-     └─────────────┘
-           │
-           ▼
-     ┌─────────────┐
-     │  OpenFlash  │
-     │  ═══════════│
-     │  СЕКРЕТЫ    │
-     │  РАСКРЫТЫ   │
-     └─────────────┘
-```
-
-</td>
-</tr>
-</table>
-
-<br>
-
-## 🎯 Почему OpenFlash?
-
-```
-┌────────────────────────────────────────────────────────────────────────────────┐
-│                                                                                │
-│   КОММЕРЧЕСКИЙ ПРОГРАММАТОР          vs              OPENFLASH                 │
-│   ══════════════════════════                        ══════════                 │
-│                                                                                │
-│   💰 $200 - $2000                                   💰 $4 - $30                │
-│   🖥️  Интерфейс эпохи Windows XP                    🖥️  Современный React+Tauri│
-│   📦 База чипов за деньги                           📦 230+ чипов БЕСПЛАТНО    │
-│   🔄 Обновления за деньги                           🔄 Бесплатно навсегда      │
-│   🤖 Без AI                                         🤖 AI-анализ встроен       │
-│   🔒 Закрытый код                                   🔓 MIT лицензия            │
-│   📅 Выглядит как 2003                              📅 Выглядит как 2025       │
-│                                                                                │
-└────────────────────────────────────────────────────────────────────────────────┘
-```
-
-<br>
-
-## 🔌 Платформы
-
-<table>
-<tr>
-<th colspan="5" align="center">⚡ МИКРОКОНТРОЛЛЕРЫ</th>
-</tr>
-<tr>
-<th>Платформа</th>
-<th>Цена</th>
-<th>Скорость</th>
-<th>Для кого</th>
-<th>Особенность</th>
-</tr>
-<tr>
-<td>🍓 <b>Raspberry Pi Pico</b></td>
-<td align="center">~$4</td>
-<td align="center">██░░░</td>
-<td>Новички</td>
-<td>PIO магия</td>
-</tr>
-<tr>
-<td>🍓 <b>Raspberry Pi Pico 2</b></td>
-<td align="center">~$5</td>
-<td align="center">███░░</td>
-<td>Энтузиасты</td>
-<td>NV-DDR поддержка</td>
-</tr>
-<tr>
-<td>🖤 <b>STM32F4 Black Pill</b></td>
-<td align="center">~$5</td>
-<td align="center">███░░</td>
-<td>Лучшее соотношение</td>
-<td>168MHz Cortex-M4</td>
-</tr>
-<tr>
-<td>⚡ <b>Teensy 4.0 / 4.1</b></td>
-<td align="center">~$20-30</td>
-<td align="center">█████</td>
-<td>Скорость важна</td>
-<td><b>USB HS 480Mbps!</b></td>
-</tr>
-<tr>
-<td>🔵 <b>Arduino GIGA R1</b></td>
-<td align="center">~$60</td>
-<td align="center">████░</td>
-<td>Enterprise</td>
-<td>WiFi + Hardware ECC</td>
-</tr>
-<tr>
-<td>📶 <b>ESP32</b></td>
-<td align="center">~$4</td>
-<td align="center">██░░░</td>
-<td>Беспроводная работа</td>
-<td>WiFi операции</td>
-</tr>
-<tr>
-<td>💙 <b>STM32F1 Blue Pill</b></td>
-<td align="center">~$2</td>
-<td align="center">█░░░░</td>
-<td>Ультра-бюджет</td>
-<td>Самый дешёвый</td>
-</tr>
-</table>
-
-<table>
-<tr>
-<th colspan="5" align="center">🖥️ ОДНОПЛАТНЫЕ КОМПЬЮТЕРЫ</th>
-</tr>
-<tr>
-<th>Платформа</th>
-<th>Цена</th>
-<th>Скорость</th>
-<th>Для кого</th>
-<th>Особенность</th>
-</tr>
-<tr>
-<td>🥧 <b>Raspberry Pi 4/5</b></td>
-<td align="center">~$35-75</td>
-<td align="center">████░</td>
-<td>Headless сервер</td>
-<td>Native GPIO</td>
-</tr>
-<tr>
-<td>🍊 <b>Orange Pi</b></td>
-<td align="center">~$15-50</td>
-<td align="center">███░░</td>
-<td>Бюджетный SBC</td>
-<td>Allwinner/Rockchip</td>
-</tr>
-<tr>
-<td>🍌 <b>Banana Pi</b></td>
-<td align="center">~$15-35</td>
-<td align="center">███░░</td>
-<td>Фанаты RISC-V</td>
-<td>SpacemiT K1 RISC-V!</td>
-</tr>
-</table>
-
-<br>
-
-## 💾 Поддерживаемые чипы
-
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                                                                              │
-│  PARALLEL NAND ████████████████████████████████████████████████████  60+     │
-│  Samsung • Micron • SK Hynix • Kioxia • Macronix • Winbond                   │
-│                                                                              │
-│  SPI NOR ████████████████████████████████████████████████████████████  75+   │
-│  Winbond • GigaDevice • Macronix • Micron • ISSI • XMC • EON                 │
-│                                                                              │
-│  SPI NAND ██████████████████████████████████████████████████████  55+        │
-│  GigaDevice • Winbond • Micron • Macronix • Kioxia • XTX • Foresee           │
-│                                                                              │
-│  eMMC ████████████████████████████████████████  40+                          │
-│  Samsung • Micron • SK Hynix • SanDisk • Kingston                            │
-│                                                                              │
-│  UFS ██████████  10+  (детекция)                                             │
-│                                                                              │
-│  ═══════════════════════════════════════════════════════════════════════     │
-│  ВСЕГО: 230+ ЧИПОВ                                                           │
-│                                                                              │
-└──────────────────────────────────────────────────────────────────────────────┘
-```
-
-<br>
-
-## ✨ Возможности
-
-<table>
-<tr>
-<td width="50%">
-
-### 🔧 Базовые операции
-```
-ЧТЕНИЕ     ████████████████████  ✓
-ЗАПИСЬ     ████████████████████  ✓
-СТИРАНИЕ   ████████████████████  ✓
-ПРОВЕРКА   ████████████████████  ✓
-КЛОНИРОВАНИЕ ██████████████████  ✓
-```
-
-### 🛡️ Коррекция ошибок
-```
-Hamming    ✓  1-бит коррекция
-BCH-4      ✓  4-бит коррекция
-BCH-8      ✓  8-бит коррекция
-BCH-16     ✓  16-бит коррекция
-BCH-24     ✓  24-бит коррекция
-```
-
-</td>
-<td width="50%">
-
-### 🤖 AI-анализ
-```
-🔍 Детекция паттернов
-   Шифрование │ Сжатие │ Исполняемый код
-
-📁 Детекция файловых систем
-   SquashFS │ UBIFS │ JFFS2 │ ext4 │ FAT
-
-🔐 Поиск ключей
-   AES-128/192/256 ключи в дампах
-
-📊 Анализ износа
-   Оценка оставшегося ресурса чипа
-
-🗺️ Карта памяти
-   Визуальная схема разделов
-```
-
-</td>
-</tr>
-</table>
-
-### 🚀 Продвинутые фичи
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                                                                             │
-│  v1.x  ✅ Фундамент                                                         │
-│        NAND • SPI • eMMC • AI-анализ • Python API • CLI                     │
-│                                                                             │
-│  v2.x  ✅ Масштаб                                                           │
-│        11 платформ • REST API • Device farm • Production line               │
-│        Логический анализатор • JTAG/SWD • OpenFlash PCB                     │
-│                                                                             │
-│  v3.0  ✅ Облако  ◄─── ВЫ ЗДЕСЬ                                             │
-│        ☁️  Синхронизация дампов между устройствами                           │
-│        👥 Командная работа                                                   │
-│        🌍 Краудсорсинг базы чипов                                            │
-│        🔄 OTA обновления AI-моделей                                          │
-│        🏢 Enterprise поддержка                                               │
-│                                                                             │
-│  v3.x  🔜 Скоро                                                             │
-│        FPGA поддержка • Forensics инструменты • Больше чипов                │
-│                                                                             │
-│  v4.0  🔮 Будущее                                                           │
-│        WebAssembly • Распределённый дампинг • Real-time коллаборация        │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-<br>
-
-## 🏎️ Сравнение скорости
-
-```
-                           ВРЕМЯ ДАМПА 1GB
-                           ═══════════════
-
-Teensy 4.1 (USB HS)    ████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  3-5 мин
-Arduino GIGA           ████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  ~10 мин
-Raspberry Pi 4         ██████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  ~12 мин
-STM32F4                ████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░  ~25 мин
-RP2350                 ████████████████████████░░░░░░░░░░░░░░░░░░░░░░  ~30 мин
-RP2040                 ████████████████████████████████████░░░░░░░░░░  ~45 мин
-ESP32                  ██████████████████████████████████████░░░░░░░░  ~50 мин
-```
-
-<br>
-
-## 🛠️ Быстрый старт
-
-### 1️⃣ Попробуй без железа
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                                                                 │
-│   Открой приложение → "Mock" → Scan → Connect → Dump           │
-│                                                                 │
-│   Изучи все функции на симулированных данных!                   │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### 2️⃣ Минимальное железо
-
-```
-ОБЩАЯ СТОИМОСТЬ: ~$6
-
-┌──────────────────────┐     ┌──────────────────────┐
-│  Raspberry Pi Pico   │     │  Провода-перемычки   │
-│  ~$4                 │  +  │  ~$2                 │
-└──────────────────────┘     └──────────────────────┘
-```
-
-### 3️⃣ Подключение (SPI Flash)
-
-```
-        PICO                          FLASH ЧИП
-    ┌──────────┐                    ┌──────────────┐
-    │          │                    │              │
-    │     GP16 ├────────────────────┤ DO (MISO)    │
-    │     GP17 ├────────────────────┤ CS#          │
-    │     GP18 ├────────────────────┤ CLK          │
-    │     GP19 ├────────────────────┤ DI (MOSI)    │
-    │      3V3 ├────────────────────┤ VCC          │
-    │      GND ├────────────────────┤ GND          │
-    │          │                    │              │
-    └──────────┘                    └──────────────┘
-```
-
-### 4️⃣ Читай!
-
-```
-Открой приложение → Scan → Connect → Detect Chip → Dump → 🎉
-```
-
-<br>
-
-## 💻 Автоматизация
-
-<table>
-<tr>
-<td width="50%">
-
-### Python API
-```python
-import openflash
-
-# Подключение
-device = openflash.connect()
-chip = device.detect()
-
-# Чтение
-dump = device.read_full()
-dump.save("firmware.bin")
-
-# Анализ
-analysis = openflash.ai.analyze(dump)
-print(f"Качество: {analysis.quality_score:.0%}")
-print(f"ФС: {analysis.filesystem}")
-```
-
-</td>
-<td width="50%">
-
-### CLI
-```bash
-# Поиск устройств
-openflash scan
-
-# Чтение чипа
-openflash read -o dump.bin
-
-# AI-анализ
-openflash analyze dump.bin
-
-# Запись с проверкой
-openflash write -i firmware.bin --verify
-
-# Пакетная обработка
-openflash batch jobs.toml
-```
-
-</td>
-</tr>
-</table>
-
-<br>
-
-## 🏗️ Сборка из исходников
+### Попробовать без железа
 
 ```bash
-# Требования: Rust 1.70+, Node 18+
-
-git clone https://github.com/openflash/openflash.git
+git clone https://github.com/bobberdolle1/openflash
 cd openflash/openflash
+cargo build --release -p openflash-cli
 
-# ┌─────────────────────────────────────────────────────────────┐
-# │  GUI (Tauri + React)                                        │
-# └─────────────────────────────────────────────────────────────┘
-cd gui && npm i && cargo tauri dev
+# Эмулируемый чип SPI NOR на 2 МиБ, состояние сохраняется в файле
+alias of='./target/release/openflash --emulate 2097152 --emulate-image /tmp/chip.bin'
 
-# ┌─────────────────────────────────────────────────────────────┐
-# │  CLI                                                        │
-# └─────────────────────────────────────────────────────────────┘
-cargo build -p openflash-cli --release
-
-# ┌─────────────────────────────────────────────────────────────┐
-# │  Прошивка (выбери свою платформу)                           │
-# └─────────────────────────────────────────────────────────────┘
-
-# RP2040 (Raspberry Pi Pico)
-cd firmware/rp2040
-rustup target add thumbv6m-none-eabi
-cargo build --release --target thumbv6m-none-eabi
-
-# RP2350 (Raspberry Pi Pico 2)
-cd firmware/rp2350
-rustup target add thumbv8m.main-none-eabihf
-cargo build --release --target thumbv8m.main-none-eabihf
-
-# Teensy 4.x (USB High Speed!)
-cd firmware/teensy4
-rustup target add thumbv7em-none-eabihf
-cargo build --release --target thumbv7em-none-eabihf
+of detect
+of --yes write -i firmware.bin
+of read -o dump.bin
+of verify --file firmware.bin
 ```
 
-<br>
+Каждый эмулируемый запуск помечается в stderr. Эмулятор программирует как
+настоящая флеш-память: биты можно только сбрасывать, запись через границу
+страницы заворачивается внутри страницы, стиранию нужен write-enable. Ошибка в
+инструментах проявится здесь, а не на вашем чипе.
 
-## 📚 Документация
+### Безопасность
 
-| | |
-|:---:|---|
-| 📖 | **[Wiki](openflash.wiki/)** — Полная документация |
-| 🆕 | **[Гайд для новичков](openflash.wiki/Beginners-Guide-RU.md)** — Никогда не пользовались программатором? |
-| 🔌 | **[Настройка железа](openflash.wiki/Hardware-Setup-RU.md)** — Схемы подключения |
-| 📋 | **[Поддерживаемые чипы](openflash.wiki/Supported-Chips-RU.md)** — 230+ чипов |
-| 🔧 | **[Решение проблем](openflash.wiki/Troubleshooting-RU.md)** — Когда что-то сломалось |
-| ❓ | **[FAQ](openflash.wiki/FAQ-RU.md)** — Частые вопросы |
+Неудачная запись флеш-памяти уничтожает данные, поэтому инструменты сделаны так,
+чтобы падать громко:
 
-<br>
+- каждая передача защищена CRC в обе стороны; повреждение сообщается, а не
+  возвращается как содержимое чипа
+- ответ, не соответствующий отправленной команде, — это ошибка, а не данные
+- перед записью сектор стирается, а частично затронутый сектор считывается и
+  перезаписывается, чтобы соседние данные выжили
+- запись проверяется обратным чтением, при расхождении указывается точное
+  смещение
+- диапазон стирания обязан быть выровнен по сектору
 
----
+### Как помочь
 
-<br>
+1. **Поднять хотя бы одну прошивку для микроконтроллера.** Всем семи нужны USB-стек,
+   диспетчер с фреймингом и настройка целевой платформы. У Teensy 4 таблица
+   опкодов ближе всех к правильной, но его USB-слой — заглушка, которая никогда
+   ничего не принимает, так что это не такая мелкая задача, как кажется.
+   Что именно отсутствует у каждой платы — в `docs/PLATFORMS.md`.
+2. **Тесты на реальном железе в CI** (self-hosted runner с Pico и W25Q).
+3. **Новые чипы в базу** — запись плюс тест.
+4. **Parallel NAND в агенте для SBC** — каркас есть, нужны адресные циклы.
+5. **Раскладки BCH конкретных контроллеров.** Сам кодек BCH теперь корректен, но
+   использует свой порядок бит. Чтобы читать ECC, записанный конкретным
+   NAND-контроллером, нужно повторить его раскладку и снять скремблирование.
 
-<!-- ═══════════════════════════════════════════════════════════════════════════ -->
-<!-- FOOTER                                                                      -->
-<!-- ═══════════════════════════════════════════════════════════════════════════ -->
-
-<div align="center">
-
-```
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║                         YOUR DATA WANTS TO BE FREE                           ║
-║                         ─────────────────────────                            ║
-║                         ТВОИ ДАННЫЕ ХОТЯТ СВОБОДЫ                            ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-```
-
-<br>
-
-**[⭐ Star](https://github.com/openflash/openflash)** · **[🐛 Issues](https://github.com/openflash/openflash/issues)** · **[💬 Discussions](https://github.com/openflash/openflash/discussions)**
-
-<br>
-
-[![Made with Rust](https://img.shields.io/badge/Made%20with-Rust-orange?style=flat-square&logo=rust)](https://www.rust-lang.org/)
-[![Made with React](https://img.shields.io/badge/Made%20with-React-61DAFB?style=flat-square&logo=react)](https://react.dev/)
-[![Made with Tauri](https://img.shields.io/badge/Made%20with-Tauri-FFC131?style=flat-square&logo=tauri)](https://tauri.app/)
-
-<br>
-
-**MIT License** — Do whatever, don't sue us / Делай что хочешь, только не суди
-
-</div>
+Пожалуйста, не добавляйте платформу или функцию в документацию раньше, чем
+заработает код: проект уже проходил через это, и разбор последствий занял
+большую часть работы над `docs/PLATFORMS.md`.

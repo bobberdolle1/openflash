@@ -1,6 +1,21 @@
 # OpenFlash Hardware Guide
 
-Complete guide for building your own OpenFlash NAND programmer.
+Wiring reference for the boards and flash interfaces OpenFlash targets.
+
+> **What of this works today**
+>
+> One configuration: a **Raspberry Pi, Orange Pi or Banana Pi** wired to a **SPI
+> NOR** chip, running the OpenFlash agent. That wiring is in
+> [wiki/Hardware-Setup.md](wiki/Hardware-Setup.md), not in this file.
+>
+> Everything in this guide — the Pico, STM32, ESP32 and Teensy setups, and the
+> parallel NAND, SPI NAND and eMMC wiring — is for firmware that does not
+> currently build. The diagrams are correct reference material and are what the
+> firmware will need once it exists, but following them today will not get you a
+> working programmer. [PLATFORMS.md](PLATFORMS.md) says where each board stands.
+>
+> The "OpenFlash PCB v1" section describes a board that has not been produced and
+> whose design files do not exist in this repository.
 
 ## Bill of Materials
 
@@ -190,11 +205,9 @@ For a cleaner setup, consider a custom PCB:
 
 ### KiCad Files
 
-Coming soon! Check the `hardware/` directory for:
-- Schematic
-- PCB layout
-- Gerber files
-- BOM
+None exist. There is no `hardware/` directory in this repository, and no
+schematic, layout or BOM has been drawn. This section described a plan as though
+it were a deliverable.
 
 ## Troubleshooting Hardware
 
@@ -695,12 +708,12 @@ The 128x64 OLED shows:
 
 ### Gerber Files
 
-Available in the `hardware/pcb/` directory:
-- `openflash-pcb-v1-gerbers.zip` - For PCB fabrication
-- `openflash-pcb-v1-bom.csv` - Bill of materials
-- `openflash-pcb-v1-schematic.pdf` - Circuit schematic
-- `openflash-pcb-v1-assembly.pdf` - Assembly guide
+None. This previously said they were "available in the `hardware/pcb/`
+directory", naming four files; that directory has never existed and neither have
+the files. The whole PCB v1 section above is a design sketch, not a board anyone
+has fabricated.
 
 ---
 
-*Last updated: January 2027 (v2.1)*
+*The board- and interface-specific sections here describe hardware the
+firmware cannot yet drive; see the note at the top of this file.*

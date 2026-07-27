@@ -1,97 +1,96 @@
-# Supported NAND Chips
+# Chip database
 
-OpenFlash supports ONFI-compliant NAND flash chips. Below is a list of tested and known-working chips.
+## What "supported" means here
 
-## Fully Tested ✅
+Two different things, and the difference matters:
 
-| Manufacturer | Model | Capacity | Page Size | Status |
-|--------------|-------|----------|-----------|--------|
-| Samsung | K9F4G08U0D | 512MB | 2KB | ✅ Tested |
-| Samsung | K9F1G08U0D | 128MB | 2KB | ✅ Tested |
-| Hynix | HY27UF084G2B | 512MB | 2KB | ✅ Tested |
+- **In the database** — OpenFlash recognises the chip's id and knows its
+  geometry: page size, block size, capacity, spare area. This is what lets it
+  name the part and lay out a dump correctly.
+- **Readable** — OpenFlash can actually talk to the chip and take a dump. That
+  needs firmware on the device side for the chip's interface.
 
-## Database (Auto-Detection)
+Today the database holds **207 parts across four interfaces**, and exactly one of
+those interfaces can be read: **SPI NOR**, over a Raspberry Pi, Orange Pi or
+Banana Pi running the agent. Parallel NAND, SPI NAND and eMMC parts are in the
+database and their dumps can be parsed, but no firmware in this repository can
+take such a dump. `docs/PLATFORMS.md` has the per-board detail.
 
-These chips are in our database and should work automatically:
+| Interface | Parts in the database | Can be read today |
+|---|---|---|
+| SPI NOR | 70 | yes — the three SBC agents |
+| Parallel NAND | 65 | no |
+| SPI NAND | 45 | no |
+| eMMC | 27 | no |
 
-### Samsung
-| Model | Capacity | Page | Block | ID |
-|-------|----------|------|-------|-----|
-| K9F1G08U0D | 128MB | 2KB | 64 | EC F1 00 95 |
-| K9F2G08U0D | 256MB | 2KB | 64 | EC DA 10 95 |
-| K9F4G08U0D | 512MB | 2KB | 64 | EC DC 10 95 |
-| K9F8G08U0M | 1GB | 2KB | 64 | EC D3 51 95 |
-| K9GAG08U0E | 2GB | 8KB | 128 | EC D5 84 72 |
-| K9LCG08U0A | 4GB | 8KB | 128 | EC D7 94 76 |
+An earlier version of this page had a "Fully Tested ✅" table listing three
+parallel NAND chips. Nothing in this repository has ever been able to read a
+parallel NAND chip, so those cannot have been tested through it. No chip in the
+database has been verified against physical hardware by this project — see the
+note at the bottom.
 
-### SK Hynix
-| Model | Capacity | Page | Block | ID |
-|-------|----------|------|-------|-----|
-| HY27UF081G2A | 128MB | 2KB | 64 | AD F1 80 1D |
-| HY27UF082G2B | 256MB | 2KB | 64 | AD DA 80 15 |
-| HY27UF084G2B | 512MB | 2KB | 64 | AD DC 80 15 |
-| H27U1G8F2BTR | 128MB | 2KB | 64 | AD F1 00 1D |
-| H27U4G8F2DTR | 512MB | 4KB | 64 | AD DC 90 95 |
+## Looking a chip up
 
-### Micron
-| Model | Capacity | Page | Block | ID |
-|-------|----------|------|-------|-----|
-| MT29F1G08ABADAH4 | 128MB | 2KB | 64 | 2C F1 80 95 |
-| MT29F2G08ABAEAH4 | 256MB | 2KB | 64 | 2C DA 90 95 |
-| MT29F4G08ABADAH4 | 512MB | 2KB | 64 | 2C DC 90 95 |
-| MT29F8G08ADBDAH4 | 1GB | 4KB | 64 | 2C 38 00 26 |
-| MT29F16G08CBACAH4 | 2GB | 4KB | 256 | 2C 48 04 46 |
+The database is queried by chip id:
 
-### Toshiba/Kioxia
-| Model | Capacity | Page | Block | ID |
-|-------|----------|------|-------|-----|
-| TC58NVG0S3HTA00 | 128MB | 2KB | 64 | 98 F1 80 15 |
-| TC58NVG1S3HTA00 | 256MB | 2KB | 64 | 98 DA 90 15 |
-| TC58NVG2S0HTA00 | 512MB | 4KB | 64 | 98 DC 90 26 |
-| TC58NVG3S0FTA00 | 1GB | 4KB | 64 | 98 D3 90 26 |
+```bash
+openflash chips --id EF4018          # SPI NOR, JEDEC id
+openflash chips --id "EC F1 00 95 40"  # parallel NAND, ONFI id
+```
 
-### Macronix
-| Model | Capacity | Page | Block | ID |
-|-------|----------|------|-------|-----|
-| MX30LF1G08AA | 128MB | 2KB | 64 | C2 F1 80 1D |
-| MX30LF2G18AC | 256MB | 2KB | 64 | C2 DA 90 95 |
-| MX30LF4G18AC | 512MB | 2KB | 64 | C2 DC 90 95 |
+Separators are optional; `EF4018`, `ef 40 18` and `EF:40:18` are the same query.
+All four databases are searched and every match is reported, because the leading
+byte is a JEDEC manufacturer code that product lines share.
 
-### Winbond
-| Model | Capacity | Page | Block | ID |
-|-------|----------|------|-------|-----|
-| W29N01GVSIAA | 128MB | 2KB | 64 | EF F1 00 95 |
-| W29N02GVSIAA | 256MB | 2KB | 64 | EF DA 10 95 |
+To read the id off a chip that is attached:
 
-### GigaDevice
-| Model | Capacity | Page | Block | ID |
-|-------|----------|------|-------|-----|
-| GD9FU1G8F2A | 128MB | 2KB | 64 | C8 F1 80 1D |
-| GD9FS2G8F2A | 256MB | 2KB | 64 | C8 DA 90 95 |
+```bash
+openflash detect
+```
 
-## Unknown Chips
+### Exact entries and derived geometry
 
-If your chip isn't recognized:
+Each database also has a fallback that derives geometry from the id — for SPI
+NOR, the third byte is log2 of the capacity, so a size can be computed for a part
+nobody has catalogued. Those two answers are not equally trustworthy, so they are
+distinguished:
 
-1. OpenFlash will show "Unknown" with the chip ID
-2. You can still try operations with manual settings
-3. [Request chip support](https://github.com/openflash/openflash/issues/new?template=chip_support.md)
+- a plain result is a catalogue entry
+- a result marked `[derived from the id, not a catalogue entry]` was computed
 
-## Adding New Chips
+A search across all four databases returns catalogue entries only. Derived
+answers are offered when you name the interface, which tells OpenFlash which
+catalogue is the right one to ask:
 
-To add a chip to the database:
+```bash
+openflash chips --id 1F8701 --interface spi-nor
+```
 
-1. Get the chip ID (shown in OpenFlash)
-2. Find the datasheet for specifications
-3. Submit a PR or issue with:
-   - Manufacturer and model
-   - Chip ID bytes
-   - Page size, block size, capacity
-   - Any special timing requirements
+### Listing the whole database
 
-## Manufacturer ID Reference
+Not available yet. The databases are written as `match` arms keyed by chip id, so
+they can be queried but not iterated, and `openflash chips` without `--id`
+reports that rather than printing a stand-in list. Turning them into tables that
+can be both looked up and enumerated is tracked in the README's contributing
+list.
 
-| ID | Manufacturer |
+## Adding a chip
+
+1. Get the id — `openflash detect`, or the datasheet.
+2. Find page size, block size, capacity and spare-area size in the datasheet.
+3. Add an entry to the matching module in `core/src/`:
+   `spi_nor.rs`, `spi_nand.rs`, `onfi.rs` (parallel NAND) or `emmc.rs`.
+4. Add a test that looks your id up and asserts the geometry.
+
+The test is the part that matters. A wrong page size in the database produces a
+dump that is silently misaligned, which is worse than not recognising the chip
+at all.
+
+## Manufacturer ids
+
+The first byte of a chip id is a JEDEC manufacturer code:
+
+| id | Manufacturer |
 |----|--------------|
 | 0x01 | AMD/Spansion |
 | 0x20 | ST/Numonyx |
@@ -103,3 +102,15 @@ To add a chip to the database:
 | 0xC8 | GigaDevice |
 | 0xEC | Samsung |
 | 0xEF | Winbond |
+
+## On testing
+
+No entry in this database has been verified against a physical chip by this
+project — nobody working on it has had the hardware. Entries come from
+datasheets, and the code paths around them are covered by unit tests and by an
+emulator that implements real flash semantics. That catches a mistyped page size
+against the datasheet; it does not catch a datasheet that is wrong, or a part
+whose real behaviour differs from its documentation.
+
+If you have run OpenFlash against a real chip, saying so in an issue is a genuine
+contribution, whether it worked or not.

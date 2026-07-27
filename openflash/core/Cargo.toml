@@ -1,13 +1,23 @@
 [package]
 name = "openflash-core"
-version = "3.0.0"
-edition = "2021"
-description = "Core library for OpenFlash NAND/eMMC programmer"
-license = "MIT"
+description = "Core library for the OpenFlash NAND/eMMC/NOR programmer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 
 [dependencies]
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+openflash-protocol = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# USB support is optional so that dump analysis, the emulator and the test suite
+# build on hosts without libudev.
+nusb = { version = "0.2", optional = true }
+
+[features]
+default = ["usb"]
+usb = ["dep:nusb"]
 
 [dev-dependencies]
 proptest = "1.4"

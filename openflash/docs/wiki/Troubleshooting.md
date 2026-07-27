@@ -1,5 +1,15 @@
 # Troubleshooting
 
+> Sections below that cover the Raspberry Pi Pico, STM32 or ESP32 refer to
+> firmware that does not currently build, so their symptoms cannot be reproduced
+> today. The working setup is a Raspberry Pi, Orange Pi or Banana Pi running the
+> agent against a SPI NOR chip; see [PLATFORMS.md](../PLATFORMS.md).
+>
+> **Start here for the working setup:** if the agent reports no interfaces, the
+> SPI bus did not open — enable spidev (`dtparam=spi=on` on a Pi, then reboot)
+> and check that `/dev/spidev0.0` exists. An agent that starts but advertises
+> nothing is telling you "no bus", which is a different problem from "no chip".
+
 Common issues and solutions.
 
 ## Connection Issues
@@ -16,7 +26,7 @@ Common issues and solutions.
    - macOS: `ls /dev/tty.usb*`
    - Linux: `ls /dev/ttyACM*`
 4. Reflash firmware to microcontroller
-5. Try Mock mode to verify app works
+5. Connect to the emulated chip to check the application itself works
 
 ### "Connection failed" after connecting
 
@@ -40,7 +50,7 @@ Common issues and solutions.
 3. Add 10kΩ pull-up on R/B# line
 4. Check for cold solder joints
 5. Try slower timing (if supported)
-6. [Report chip](https://github.com/openflash/openflash/issues/new?template=chip_support.md) for database addition
+6. [Report chip](https://github.com/bobberdolle1/openflash/issues/new?template=chip_support.md) for database addition
 
 ### All 0xFF or 0x00 chip ID
 
@@ -183,9 +193,9 @@ Common issues and solutions.
 
 ## Still Having Issues?
 
-1. Check [GitHub Issues](https://github.com/openflash/openflash/issues) for similar problems
-2. Ask in [Discussions](https://github.com/openflash/openflash/discussions)
-3. Open a [bug report](https://github.com/openflash/openflash/issues/new?template=bug_report.md) with:
+1. Check [GitHub Issues](https://github.com/bobberdolle1/openflash/issues) for similar problems
+2. Ask in [Discussions](https://github.com/bobberdolle1/openflash/discussions)
+3. Open a [bug report](https://github.com/bobberdolle1/openflash/issues/new?template=bug_report.md) with:
    - OS and version
    - Hardware used
    - Steps to reproduce

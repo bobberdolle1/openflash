@@ -1,17 +1,57 @@
 [workspace]
 members = [
+    "protocol",
     "core",
     "cli",
     "pyopenflash",
     "gui/src-tauri",
-    # Firmware requires specific embassy versions, build separately
-    # "firmware/rp2040",
-    # "firmware/stm32f1",
+    # The single-board-computer agents are ordinary Linux binaries, so they build
+    # and lint alongside the host tools.
+    "firmware/sbc-agent",
+    "firmware/raspberry_pi",
+    "firmware/orange_pi",
+    "firmware/banana_pi",
+]
+
+# The microcontroller firmware targets bare metal: each crate pins its own
+# embassy/esp-hal versions and needs a cross toolchain, a linker script and a
+# per-board target, so they are not part of this workspace. Their opcode tables
+# are still checked against the shared protocol by
+# protocol/tests/firmware_conformance.rs.
+exclude = [
+    "firmware/rp2040",
+    "firmware/rp2350",
+    "firmware/stm32f1",
+    "firmware/stm32f4",
+    "firmware/esp32",
+    "firmware/teensy4",
+    "firmware/arduino_giga",
 ]
 resolver = "2"
 
+[workspace.package]
+version = "3.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/bobberdolle1/openflash"
+# Verified by the MSRV job, and by `cargo +1.85 check` before this was changed.
+#
+# It was 1.77, which had not been true for some time and nothing caught it,
+# because the CI job that checks it has never been able to run. Two separate
+# things push it up: nusb 0.2, the USB transport, needs 1.79, and the `toml`
+# crate the CLI uses pulls in indexmap → hashbrown 0.17, whose manifest is
+# edition 2024 and cannot even be *parsed* by a Cargo older than 1.85.
+#
+# The desktop app needs more still and overrides this; see gui/src-tauri.
+rust-version = "1.85"
+
 [workspace.dependencies]
-# Shared dependencies for the entire workspace
+# Internal crates
+openflash-protocol = { path = "protocol", version = "3.1.0" }
+openflash-core = { path = "core", version = "3.1.0" }
+openflash-sbc-agent = { path = "firmware/sbc-agent", version = "3.1.0" }
+
+# Shared third-party dependencies
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.0", features = ["full"] }

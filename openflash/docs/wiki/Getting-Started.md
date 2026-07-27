@@ -1,81 +1,111 @@
 # Getting Started
 
-This guide will help you get OpenFlash up and running.
+## Before you start
 
-## Prerequisites
+There are no downloadable builds. The `v3.0.0` and `v1.5.0` releases are tags
+with no attached files — no installers, no firmware images — so everything below
+builds from source. An earlier version of this page told you to download
+`OpenFlash-x.x.x-setup.exe` and `openflash-rp2040.uf2` from the Releases page;
+neither has ever existed there.
 
-### Software
-- Windows 10/11, macOS 10.15+, or Linux
-- No additional drivers needed (uses native USB)
+What you can actually run today:
 
-### Hardware (choose one)
-- **Raspberry Pi Pico** (RP2040) - Recommended, ~$4
-- **Blue Pill** (STM32F103C8T6) - Budget option, ~$2
+- the CLI and the desktop app, against **SPI NOR** flash, using a **Raspberry
+  Pi, Orange Pi or Banana Pi** as the programmer
+- everything, against a built-in **emulator**, with no hardware at all
 
-### NAND Flash
-- Any ONFI-compliant parallel NAND flash
-- 8-bit data bus (16-bit not yet supported)
-- 3.3V operation
+The microcontroller firmware — Pico, Blue Pill, ESP32, Teensy — does not build.
+See [PLATFORMS.md](../PLATFORMS.md).
 
-## Installation
+## Build from source
 
-### Option 1: Download Release (Recommended)
+Prerequisites:
 
-1. Go to [Releases](https://github.com/openflash/openflash/releases)
-2. Download the installer for your OS:
-   - Windows: `OpenFlash-x.x.x-setup.exe`
-   - macOS: `OpenFlash-x.x.x.dmg`
-   - Linux: `OpenFlash-x.x.x.AppImage` or `.deb`
-3. Install and run
-
-### Option 2: Build from Source
+- Rust 1.85 or newer (the desktop app needs 1.88)
+- Node.js 18+, and Tauri's system packages, only if you want the desktop app
 
 ```bash
-# Prerequisites
-# - Rust 1.70+
-# - Node.js 18+
-# - Tauri prerequisites (see tauri.app)
-
-git clone https://github.com/openflash/openflash.git
-cd openflash/openflash/gui
-npm install
-cargo tauri build
+git clone https://github.com/bobberdolle1/openflash
+cd openflash/openflash
+cargo build --release -p openflash-cli
 ```
 
-## First Run (Without Hardware)
+The binary lands in `target/release/openflash`.
 
-OpenFlash includes a mock device for testing:
+For the desktop app, on Debian or Ubuntu:
 
-1. Launch OpenFlash
-2. Click **"Mock"** button
-3. Click **"Scan"** - you'll see "OpenFlash Mock Device"
-4. Click **"Connect"**
-5. Click **"Dump NAND"**
-6. Explore the tabs: Hex View, Bitmap, Analysis
+```bash
+sudo apt install libwebkit2gtk-4.1-dev libudev-dev
+cd gui && npm ci && npm run tauri build
+```
 
-## Flashing Firmware
+## First run, without hardware
 
-### Raspberry Pi Pico (RP2040)
+The emulator implements the device side of the protocol against a byte array,
+with real flash semantics — programming only clears bits, a program crossing a
+page boundary wraps within the page, an erase needs the write-enable latch. A
+mistake in the tooling shows up there rather than on your chip.
 
-1. Download `openflash-rp2040.uf2` from Releases
-2. Hold BOOTSEL button on Pico
-3. Connect USB while holding button
-4. Pico appears as USB drive
-5. Copy `.uf2` file to the drive
-6. Pico reboots automatically
+```bash
+cd openflash/openflash
+alias of='./target/release/openflash --emulate 2097152 --emulate-image /tmp/chip.bin'
 
-### STM32F103 (Blue Pill)
+of detect                       # identify the emulated part
+of --yes write -i firmware.bin  # erase the affected sectors, program, verify
+of read -o dump.bin             # dump it back
+of verify --file firmware.bin   # compare the chip against the file
+```
 
-1. Download `openflash-stm32f1.bin` from Releases
-2. Use ST-Link or USB-Serial adapter
-3. Flash using `st-flash` or STM32CubeProgrammer
+`--emulate-image` keeps the chip's contents in a file between commands. Without
+it each invocation gets a freshly erased chip, so a write could not be read back.
 
-## Wiring
+Every emulated run says so on stderr, so an emulator result is never mistaken for
+a hardware one.
 
-See [Hardware Setup](Hardware-Setup.md) for detailed pinout diagrams.
+In the desktop app, the emulator appears in the device list as
+"Emulated SPI NOR chip (no hardware)".
 
-## Next Steps
+## With hardware
 
-- [Hardware Setup](Hardware-Setup.md) - Wire up your NAND chip
-- [Supported Chips](Supported-Chips.md) - Check if your chip is supported
-- [Troubleshooting](Troubleshooting.md) - Common issues and solutions
+You need a Raspberry Pi, Orange Pi or Banana Pi, wired to a SPI NOR chip. See
+[Hardware Setup](Hardware-Setup.md) for the wiring.
+
+On the board:
+
+```bash
+# Pick the crate for your board
+cargo run --release -p openflash-firmware-raspberry-pi
+cargo run --release -p openflash-firmware-orange-pi
+cargo run --release -p openflash-firmware-banana-pi
+```
+
+The agent needs spidev enabled — on a Raspberry Pi that is `dtparam=spi=on` in
+`/boot/firmware/config.txt` and a reboot. If it cannot open the bus it still
+starts and reports no interfaces, so you can tell "no bus" from "no chip".
+
+From your machine:
+
+```bash
+openflash --unix /tmp/openflash.sock detect
+openflash --unix /tmp/openflash.sock read -o dump.bin
+```
+
+To work over the network instead, set `OPENFLASH_TCP=0.0.0.0:9999` on the board
+and use `openflash --tcp board.local:9999`.
+
+## Safety
+
+`read` and `verify` open the device read-only, so a dump cannot alter the chip it
+is reading. `write` and `erase` ask for confirmation against real hardware unless
+you pass `--yes`. Programming erases first and preserves a partially covered
+sector by reading it out and rewriting it.
+
+Take a full dump before writing anything. It is the only way back.
+
+## Next steps
+
+- [Hardware Setup](Hardware-Setup.md) — wiring
+- [Supported Chips](Supported-Chips.md) — what the database knows, and what can
+  actually be read
+- [Troubleshooting](Troubleshooting.md)
+- [PLATFORMS.md](../PLATFORMS.md) — per-board status

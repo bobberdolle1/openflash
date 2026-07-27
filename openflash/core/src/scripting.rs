@@ -4,6 +4,16 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use openflash_protocol::FlashInterface;
+
+use crate::device::{Device, DeviceError, ProgramOptions as DeviceProgramOptions, ProgramReport};
+use crate::emulator::EmulatedDevice;
+#[cfg(unix)]
+use crate::transport::UnixTransport;
+#[cfg(feature = "usb")]
+use crate::transport::UsbTransport;
+use crate::transport::{TcpTransport, Transport, TransportKind};
+
 // ============================================================================
 // Error Types
 // ============================================================================
@@ -69,26 +79,30 @@ pub type ScriptResult<T> = Result<T, ScriptError>;
 // Device Connection API
 // ============================================================================
 
-/// Device connection configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Which device to connect to, and how long to wait for it.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConnectionConfig {
-    /// Serial port path (e.g., "/dev/ttyUSB0", "COM3")
-    pub port: Option<String>,
-    /// Baud rate (default: 115200)
-    pub baud_rate: u32,
-    /// Connection timeout in milliseconds
+    /// Where to look for the device.
+    pub target: ConnectionTarget,
+    /// How long to wait for each exchange, in milliseconds.
     pub timeout_ms: u32,
-    /// Auto-detect device
-    pub auto_detect: bool,
 }
 
 impl Default for ConnectionConfig {
     fn default() -> Self {
         Self {
-            port: None,
-            baud_rate: 115200,
+            target: ConnectionTarget::AutoUsb,
             timeout_ms: 5000,
-            auto_detect: true,
+        }
+    }
+}
+
+impl ConnectionConfig {
+    /// Connect to the in-process emulator with a chip of `size` bytes.
+    pub fn emulated(size: usize) -> Self {
+        Self {
+            target: ConnectionTarget::Emulator { size },
+            ..Self::default()
         }
     }
 }
@@ -106,47 +120,6 @@ pub struct DeviceInfo {
     pub serial_number: String,
     /// Supported interfaces
     pub interfaces: Vec<String>,
-}
-
-/// Device connection handle
-#[derive(Debug, Clone)]
-pub struct DeviceHandle {
-    /// Device info
-    pub info: DeviceInfo,
-    /// Connection state
-    pub connected: bool,
-    /// Current interface
-    pub current_interface: String,
-}
-
-impl DeviceHandle {
-    /// Create a new device handle (mock for now)
-    pub fn new(info: DeviceInfo) -> Self {
-        Self {
-            info,
-            connected: true,
-            current_interface: "parallel_nand".to_string(),
-        }
-    }
-
-    /// Check if device is connected
-    pub fn is_connected(&self) -> bool {
-        self.connected
-    }
-
-    /// Set flash interface
-    pub fn set_interface(&mut self, interface: &str) -> ScriptResult<()> {
-        let valid = ["parallel_nand", "spi_nand", "spi_nor", "emmc", "ufs"];
-        if valid.contains(&interface) {
-            self.current_interface = interface.to_string();
-            Ok(())
-        } else {
-            Err(ScriptError::InvalidOperation(format!(
-                "Unknown interface: {}. Valid: {:?}",
-                interface, valid
-            )))
-        }
-    }
 }
 
 // ============================================================================
@@ -993,152 +966,291 @@ pub struct CiOperationResult {
 // High-Level API (Python-like interface)
 // ============================================================================
 
-/// OpenFlash high-level API
-/// Designed to mirror the Python API for consistency
-#[derive(Debug)]
+/// Where to look for a device.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum ConnectionTarget {
+    /// Find the single connected USB device.
+    #[default]
+    AutoUsb,
+    /// A USB device by serial number or `bus-address`.
+    Usb(String),
+    /// An SBC agent at `host:port`.
+    Tcp(String),
+    /// An SBC agent listening on a Unix socket.
+    Unix(String),
+    /// The in-process emulator, backed by a chip of the given size in bytes.
+    ///
+    /// Nothing real is touched. Every caller that offers this must label its
+    /// output as emulated.
+    Emulator {
+        /// Emulated chip size in bytes; must be a multiple of 4096.
+        size: usize,
+    },
+}
+
+/// The high-level API, mirroring the Python bindings.
+///
+/// Every method here performs real I/O against a real device. There is no mode
+/// in which a read returns invented bytes or a write reports success without
+/// having written: when there is no device, `connect` fails.
 pub struct OpenFlash {
-    /// Device handle
-    device: Option<DeviceHandle>,
-    /// Plugin manager
+    device: Option<Device<Box<dyn Transport>>>,
+    info: Option<DeviceInfo>,
     plugins: PluginManager,
-    /// Last dump data
     last_dump: Option<DumpResult>,
-    /// Last analysis result
     last_analysis: Option<ScriptAnalysisResult>,
 }
 
+impl std::fmt::Debug for OpenFlash {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OpenFlash")
+            .field("connected", &self.is_connected())
+            .field("device", &self.info)
+            .finish_non_exhaustive()
+    }
+}
+
+fn to_script_error(error: DeviceError) -> ScriptError {
+    match error {
+        DeviceError::RangeOutOfBounds { start, .. } => ScriptError::ReadFailed {
+            address: start,
+            reason: "range does not fit on the chip".to_string(),
+        },
+        DeviceError::VerificationFailed { offset, .. } => ScriptError::WriteFailed {
+            address: offset,
+            reason: "verification failed".to_string(),
+        },
+        other => ScriptError::InvalidOperation(other.to_string()),
+    }
+}
+
 impl OpenFlash {
-    /// Create new OpenFlash instance
+    /// Create an unconnected instance.
     pub fn new() -> Self {
         Self {
             device: None,
+            info: None,
             plugins: PluginManager::new(),
             last_dump: None,
             last_analysis: None,
         }
     }
 
-    /// Connect to device
+    /// Connect to the single attached USB device.
     pub fn connect(&mut self) -> ScriptResult<&DeviceInfo> {
         self.connect_with_config(ConnectionConfig::default())
     }
 
-    /// Connect with configuration
+    /// Connect to the device named by `config`.
     pub fn connect_with_config(&mut self, config: ConnectionConfig) -> ScriptResult<&DeviceInfo> {
-        // Mock implementation - in real version would scan USB/serial
-        let info = DeviceInfo {
-            port: config.port.unwrap_or_else(|| "/dev/ttyUSB0".to_string()),
-            firmware_version: "1.8.0".to_string(),
-            platform: "RP2040".to_string(),
-            serial_number: "OF-2026-001234".to_string(),
-            interfaces: vec![
-                "parallel_nand".to_string(),
-                "spi_nand".to_string(),
-                "spi_nor".to_string(),
-                "emmc".to_string(),
-            ],
-        };
-        self.device = Some(DeviceHandle::new(info));
-        Ok(&self.device.as_ref().unwrap().info)
+        let transport = open_transport(&config)?;
+        let device = Device::connect(transport).map_err(|e| {
+            ScriptError::ConnectionFailed(format!("handshake with the device failed: {e}"))
+        })?;
+
+        let version = *device.version();
+        let kind = device.kind();
+        self.info = Some(DeviceInfo {
+            port: kind.to_string(),
+            firmware_version: format!(
+                "{}.{}.{}",
+                version.firmware.0, version.firmware.1, version.firmware.2
+            ),
+            platform: version
+                .platform
+                .map(|p| p.name().to_string())
+                .unwrap_or_else(|| "unknown".to_string()),
+            serial_number: match &kind {
+                TransportKind::Usb { address } => address.clone(),
+                other => other.to_string(),
+            },
+            interfaces: FlashInterface::ALL
+                .iter()
+                .filter(|iface| version.supports(**iface))
+                .map(|iface| iface.as_str().to_string())
+                .collect(),
+        });
+        self.device = Some(device);
+
+        Ok(self.info.as_ref().expect("just set"))
     }
 
-    /// Disconnect from device
+    /// Close the connection.
     pub fn disconnect(&mut self) {
         self.device = None;
+        self.info = None;
     }
 
-    /// Check if connected
+    /// Whether a device is currently open.
     pub fn is_connected(&self) -> bool {
-        self.device
-            .as_ref()
-            .map(|d| d.is_connected())
-            .unwrap_or(false)
+        self.device.is_some()
     }
 
-    /// Get device info
+    /// Information about the connected device.
     pub fn device_info(&self) -> Option<&DeviceInfo> {
-        self.device.as_ref().map(|d| &d.info)
+        self.info.as_ref()
     }
 
-    /// Detect chip
-    pub fn detect_chip(&self) -> ScriptResult<ChipDetectionResult> {
-        if !self.is_connected() {
-            return Err(ScriptError::NotConnected);
-        }
+    /// Refuse every operation that would modify the chip.
+    pub fn set_read_only(&mut self, read_only: bool) -> ScriptResult<()> {
+        self.device_mut()?.set_read_only(read_only);
+        Ok(())
+    }
 
-        // Mock implementation
+    fn device_mut(&mut self) -> ScriptResult<&mut Device<Box<dyn Transport>>> {
+        self.device.as_mut().ok_or(ScriptError::NotConnected)
+    }
+
+    /// Read the chip id off the bus and look it up.
+    pub fn detect_chip(&mut self) -> ScriptResult<ChipDetectionResult> {
+        let chip = self.device_mut()?.identify().map_err(to_script_error)?;
+
+        let mut properties = HashMap::new();
+        properties.insert("exact_match".to_string(), chip.exact_match.to_string());
+        properties.insert("sector_size".to_string(), chip.sector_size.to_string());
+
         Ok(ChipDetectionResult {
-            manufacturer: "Samsung".to_string(),
-            model: "K9F1G08U0E".to_string(),
-            capacity: 128 * 1024 * 1024, // 128MB
-            page_size: 2048,
-            block_size: 128 * 1024,
-            oob_size: 64,
-            id_bytes: vec![0xEC, 0xF1, 0x00, 0x95, 0x40],
-            interface: "parallel_nand".to_string(),
-            properties: HashMap::new(),
+            manufacturer: chip.manufacturer,
+            model: chip.model,
+            capacity: chip.capacity,
+            page_size: chip.page_size,
+            block_size: chip.sector_size,
+            // SPI NOR has no spare area; a NAND interface will report one here
+            // once the device layer covers NAND.
+            oob_size: 0,
+            id_bytes: chip.jedec_id.to_vec(),
+            interface: FlashInterface::SpiNor.as_str().to_string(),
+            properties,
         })
     }
 
-    /// Read full chip
+    /// Dump the whole chip.
     pub fn read_full(&mut self) -> ScriptResult<&DumpResult> {
         self.read_with_options(ReadOptions::default())
     }
 
-    /// Read with options
+    /// Dump part of the chip.
     pub fn read_with_options(&mut self, options: ReadOptions) -> ScriptResult<&DumpResult> {
-        if !self.is_connected() {
-            return Err(ScriptError::NotConnected);
-        }
-
-        // Mock implementation
         let chip = self.detect_chip()?;
         let length = options.length.unwrap_or(chip.capacity);
+        let device = self.device_mut()?;
 
-        let result = DumpResult {
-            data: vec![0xFF; length as usize], // Mock data
-            oob_data: if options.include_oob {
-                Some(vec![
-                    0xFF;
-                    (length / chip.page_size as u64 * chip.oob_size as u64)
-                        as usize
-                ])
-            } else {
-                None
-            },
-            bad_blocks: vec![],
+        let mut data = Vec::new();
+        let report = device
+            .read_into(options.start_address, length, &mut data, None)
+            .map_err(to_script_error)?;
+
+        if options.include_oob {
+            return Err(ScriptError::InvalidOperation(
+                "the spare (OOB) area only exists on NAND, which this interface does not \
+                 expose"
+                    .to_string(),
+            ));
+        }
+
+        let page_size = chip.page_size.max(1) as u64;
+        let block_size = chip.block_size.max(1) as u64;
+        self.last_dump = Some(DumpResult {
+            data,
+            oob_data: None,
+            bad_blocks: Vec::new(),
             stats: ReadStats {
-                bytes_read: length,
-                pages_read: (length / chip.page_size as u64) as u32,
-                blocks_read: (length / chip.block_size as u64) as u32,
+                bytes_read: report.bytes_read,
+                pages_read: (report.bytes_read / page_size) as u32,
+                blocks_read: (report.bytes_read / block_size) as u32,
                 ecc_corrections: 0,
-                duration_ms: 5000,
-                speed_bps: length / 5,
+                duration_ms: report.duration.as_millis() as u64,
+                speed_bps: report.bytes_per_second().unwrap_or(0),
             },
-        };
-
-        self.last_dump = Some(result);
-        Ok(self.last_dump.as_ref().unwrap())
+        });
+        Ok(self.last_dump.as_ref().expect("just set"))
     }
 
-    /// Get last dump
+    /// Write `data` at `options.start_address`, erasing first by default.
+    pub fn write(&mut self, data: &[u8], options: WriteOptions) -> ScriptResult<ProgramReport> {
+        let device = self.device_mut()?;
+        device
+            .program(
+                options.start_address,
+                data,
+                DeviceProgramOptions {
+                    erase_first: options.erase_before_write,
+                    verify: options.verify,
+                    skip_blank_pages: true,
+                },
+                None,
+            )
+            .map_err(to_script_error)
+    }
+
+    /// Erase whole sectors covering the range, returning the sector count.
+    pub fn erase(&mut self, start: u64, length: u64) -> ScriptResult<u64> {
+        self.device_mut()?
+            .erase_range(start, length)
+            .map_err(to_script_error)
+    }
+
+    /// Read the chip back and compare it with `expected`.
+    pub fn verify(&mut self, start: u64, expected: &[u8]) -> ScriptResult<()> {
+        self.device_mut()?
+            .verify(start, expected, None)
+            .map_err(to_script_error)
+    }
+
+    /// The most recent dump.
     pub fn last_dump(&self) -> Option<&DumpResult> {
         self.last_dump.as_ref()
     }
 
-    /// Get last analysis
+    /// The most recent analysis result.
     pub fn last_analysis(&self) -> Option<&ScriptAnalysisResult> {
         self.last_analysis.as_ref()
     }
 
-    /// Get plugin manager
+    /// The plugin manager.
     pub fn plugins(&mut self) -> &mut PluginManager {
         &mut self.plugins
     }
 
-    /// Create batch processor
+    /// Create a batch processor.
     pub fn batch(&self) -> BatchProcessor {
         BatchProcessor::new()
+    }
+}
+
+/// Open the transport described by `config`.
+fn open_transport(config: &ConnectionConfig) -> ScriptResult<Box<dyn Transport>> {
+    let timeout = std::time::Duration::from_millis(u64::from(config.timeout_ms).max(100));
+
+    match &config.target {
+        ConnectionTarget::Emulator { size } => Ok(Box::new(EmulatedDevice::new(
+            "EMULATED",
+            [0xEF, 0x40, 0x15],
+            *size,
+        ))),
+        ConnectionTarget::Tcp(endpoint) => TcpTransport::connect(endpoint, timeout)
+            .map(|t| Box::new(t) as Box<dyn Transport>)
+            .map_err(|e| ScriptError::ConnectionFailed(e.to_string())),
+        #[cfg(unix)]
+        ConnectionTarget::Unix(path) => UnixTransport::connect(path)
+            .map(|t| Box::new(t) as Box<dyn Transport>)
+            .map_err(|e| ScriptError::ConnectionFailed(e.to_string())),
+        #[cfg(not(unix))]
+        ConnectionTarget::Unix(_) => Err(ScriptError::ConnectionFailed(
+            "Unix sockets are not available on this platform".to_string(),
+        )),
+        #[cfg(feature = "usb")]
+        ConnectionTarget::AutoUsb => UsbTransport::open_only()
+            .map(|t| Box::new(t) as Box<dyn Transport>)
+            .map_err(|e| ScriptError::ConnectionFailed(e.to_string())),
+        #[cfg(feature = "usb")]
+        ConnectionTarget::Usb(selector) => UsbTransport::open(selector)
+            .map(|t| Box::new(t) as Box<dyn Transport>)
+            .map_err(|e| ScriptError::ConnectionFailed(e.to_string())),
+        #[cfg(not(feature = "usb"))]
+        ConnectionTarget::AutoUsb | ConnectionTarget::Usb(_) => Err(ScriptError::ConnectionFailed(
+            "this build was compiled without USB support".to_string(),
+        )),
     }
 }
 
@@ -1157,41 +1269,86 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_connection_config_default() {
+    fn connection_config_defaults_to_the_single_usb_device() {
         let config = ConnectionConfig::default();
-        assert_eq!(config.baud_rate, 115200);
+        assert_eq!(config.target, ConnectionTarget::AutoUsb);
         assert_eq!(config.timeout_ms, 5000);
-        assert!(config.auto_detect);
     }
 
     #[test]
-    fn test_openflash_connect() {
+    fn connecting_to_the_emulator_reports_a_real_handshake() {
         let mut of = OpenFlash::new();
         assert!(!of.is_connected());
 
-        let result = of.connect();
-        assert!(result.is_ok());
+        let info = of
+            .connect_with_config(ConnectionConfig::emulated(64 * 1024))
+            .expect("the emulator always answers");
+        assert!(info.port.starts_with("emulator:"));
+        assert_eq!(info.interfaces, vec!["spi-nor".to_string()]);
         assert!(of.is_connected());
 
         of.disconnect();
         assert!(!of.is_connected());
     }
 
+    /// The API must refuse to work rather than invent data when nothing is
+    /// connected. This is the behaviour the mock implementation used to break.
     #[test]
-    fn test_device_handle_interface() {
-        let info = DeviceInfo {
-            port: "/dev/ttyUSB0".to_string(),
-            firmware_version: "1.8.0".to_string(),
-            platform: "RP2040".to_string(),
-            serial_number: "TEST".to_string(),
-            interfaces: vec!["parallel_nand".to_string()],
-        };
-        let mut handle = DeviceHandle::new(info);
+    fn operations_without_a_connection_fail() {
+        let mut of = OpenFlash::new();
+        assert!(matches!(of.detect_chip(), Err(ScriptError::NotConnected)));
+        assert!(matches!(of.read_full(), Err(ScriptError::NotConnected)));
+        assert!(matches!(of.erase(0, 4096), Err(ScriptError::NotConnected)));
+        assert!(matches!(
+            of.write(&[0u8; 4], WriteOptions::default()),
+            Err(ScriptError::NotConnected)
+        ));
+    }
 
-        assert!(handle.set_interface("spi_nand").is_ok());
-        assert_eq!(handle.current_interface, "spi_nand");
+    #[test]
+    fn detect_read_write_and_verify_round_trip_against_the_emulator() {
+        let mut of = OpenFlash::new();
+        of.connect_with_config(ConnectionConfig::emulated(64 * 1024))
+            .unwrap();
 
-        assert!(handle.set_interface("invalid").is_err());
+        let chip = of.detect_chip().unwrap();
+        // 0x10 is the capacity byte for 2^16 = 64 KiB, the size asked for above:
+        // the emulator derives it from its array so the id cannot disagree with
+        // how much memory there is.
+        assert_eq!(chip.id_bytes, vec![0xEF, 0x40, 0x10]);
+        assert_eq!(chip.capacity, 64 * 1024);
+
+        let payload: Vec<u8> = (0..1024u32).map(|i| (i % 251) as u8).collect();
+        let report = of.write(&payload, WriteOptions::default()).unwrap();
+        assert!(report.verified);
+
+        of.verify(0, &payload).unwrap();
+
+        let dump = of
+            .read_with_options(ReadOptions {
+                length: Some(payload.len() as u64),
+                ..ReadOptions::default()
+            })
+            .unwrap();
+        assert_eq!(dump.data, payload);
+        assert_eq!(dump.stats.bytes_read, payload.len() as u64);
+    }
+
+    #[test]
+    fn a_read_only_session_refuses_to_write() {
+        let mut of = OpenFlash::new();
+        of.connect_with_config(ConnectionConfig::emulated(64 * 1024))
+            .unwrap();
+        of.set_read_only(true).unwrap();
+
+        assert!(of.write(&[0x00; 16], WriteOptions::default()).is_err());
+        // Reading is still allowed.
+        assert!(of
+            .read_with_options(ReadOptions {
+                length: Some(16),
+                ..ReadOptions::default()
+            })
+            .is_ok());
     }
 
     #[test]
@@ -1297,7 +1454,7 @@ mod tests {
 
     #[test]
     fn test_chip_detection_not_connected() {
-        let of = OpenFlash::new();
+        let mut of = OpenFlash::new();
         let result = of.detect_chip();
         assert!(matches!(result, Err(ScriptError::NotConnected)));
     }

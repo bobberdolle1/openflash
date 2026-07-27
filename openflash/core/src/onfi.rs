@@ -359,7 +359,11 @@ pub fn get_chip_info(chip_id: &[u8]) -> Option<NandChipInfo> {
     get_chip_info_generic(mfr, device)
 }
 
-fn get_chip_info_exact(chip_id: &[u8]) -> Option<NandChipInfo> {
+/// An exact catalogue entry, or `None`. See [`get_spi_nor_chip_info_exact`]
+/// in `spi_nor` for why this is separate from the generic fallback.
+///
+/// [`get_spi_nor_chip_info_exact`]: crate::spi_nor::get_spi_nor_chip_info_exact
+pub fn get_chip_info_exact(chip_id: &[u8]) -> Option<NandChipInfo> {
     match chip_id {
         // ============ Samsung ============
         // K9F1G08U0B - 128MB SLC

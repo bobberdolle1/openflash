@@ -95,11 +95,20 @@ pub enum DevicePlatform {
     Unknown,
 }
 
+impl std::str::FromStr for DevicePlatform {
+    // Parsing never fails: an unrecognised name maps to `Unknown`, which is a
+    // state the device pool has to handle anyway.
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self::from_name(s))
+    }
+}
+
 impl DevicePlatform {
-    // Not `std::str::FromStr`: parsing is infallible here, an unrecognised name
-    // maps to `Unknown` rather than an error, and the name is public API.
-    #[allow(clippy::should_implement_trait)]
-    pub fn from_str(s: &str) -> Self {
+    /// Parse a platform name, case-insensitively. Unrecognised names map to
+    /// [`DevicePlatform::Unknown`].
+    pub fn from_name(s: &str) -> Self {
         match s.to_uppercase().as_str() {
             "RP2040" => Self::RP2040,
             "STM32F1" | "STM32F103" => Self::STM32F1,
@@ -1477,7 +1486,7 @@ pub enum ParallelJobStatus {
 impl ParallelDumpJob {
     /// Create a new parallel dump job
     pub fn new(total_size: u64, config: ParallelDumpConfig) -> Self {
-        let chunk_count = ((total_size + config.chunk_size - 1) / config.chunk_size) as usize;
+        let chunk_count = total_size.div_ceil(config.chunk_size) as usize;
         let mut chunks = Vec::with_capacity(chunk_count);
 
         for i in 0..chunk_count {
@@ -1930,13 +1939,19 @@ mod tests {
 
     #[test]
     fn test_device_platform_from_str() {
-        assert_eq!(DevicePlatform::from_str("RP2040"), DevicePlatform::RP2040);
-        assert_eq!(DevicePlatform::from_str("stm32f4"), DevicePlatform::STM32F4);
+        assert_eq!(DevicePlatform::from_name("RP2040"), DevicePlatform::RP2040);
         assert_eq!(
-            DevicePlatform::from_str("ESP32-S3"),
+            DevicePlatform::from_name("stm32f4"),
+            DevicePlatform::STM32F4
+        );
+        assert_eq!(
+            DevicePlatform::from_name("ESP32-S3"),
             DevicePlatform::ESP32S3
         );
-        assert_eq!(DevicePlatform::from_str("unknown"), DevicePlatform::Unknown);
+        assert_eq!(
+            DevicePlatform::from_name("unknown"),
+            DevicePlatform::Unknown
+        );
     }
 
     #[test]

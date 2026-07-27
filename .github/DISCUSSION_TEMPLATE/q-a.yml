@@ -6,8 +6,8 @@ body:
     attributes:
       value: |
         Before asking, please check:
-        - [FAQ](https://github.com/openflash/openflash/wiki/FAQ)
-        - [Troubleshooting](https://github.com/openflash/openflash/wiki/Troubleshooting)
+        - [FAQ](https://github.com/bobberdolle1/openflash/wiki/FAQ)
+        - [Troubleshooting](https://github.com/bobberdolle1/openflash/wiki/Troubleshooting)
         - Existing discussions
         
   - type: textarea

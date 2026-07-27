@@ -529,6 +529,21 @@ impl ChipProgrammer {
         self.options = options;
     }
 
+    /// Bytes of spare (OOB) area per page.
+    pub fn oob_size(&self) -> u32 {
+        self.oob_size
+    }
+
+    /// Bytes written per page program, excluding the spare area.
+    pub fn page_size(&self) -> u32 {
+        self.page_size
+    }
+
+    /// Total bytes a page occupies on the chip, including its spare area.
+    pub fn page_stride(&self) -> u32 {
+        self.page_size + self.oob_size
+    }
+
     /// Get bad block table reference
     pub fn bad_block_table(&self) -> &BadBlockTable {
         &self.bbt

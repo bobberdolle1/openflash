@@ -12,37 +12,13 @@ interface Props {
 export function NetworkDeviceDialog({ isOpen, onClose, onDeviceAdded, onStatusChange }: Props) {
   const [host, setHost] = useState("192.168.1.100");
   const [port, setPort] = useState("9999");
-  const [name, setName] = useState("");
   const [isConnecting, setIsConnecting] = useState(false);
 
   if (!isOpen) return null;
 
-  async function handleAdd() {
-    try {
-      setIsConnecting(true);
-      await invoke("add_network_device", {
-        host,
-        port: parseInt(port, 10),
-        name: name || null,
-      });
-      onStatusChange?.(`Added network device ${host}:${port}`);
-      onDeviceAdded();
-      onClose();
-    } catch (e) {
-      onStatusChange?.(`Error: ${e}`);
-    } finally {
-      setIsConnecting(false);
-    }
-  }
-
   async function handleConnect() {
     try {
       setIsConnecting(true);
-      await invoke("add_network_device", {
-        host,
-        port: parseInt(port, 10),
-        name: name || null,
-      });
       await invoke("connect_network_device", {
         host,
         port: parseInt(port, 10),
@@ -87,26 +63,12 @@ export function NetworkDeviceDialog({ isOpen, onClose, onDeviceAdded, onStatusCh
           />
         </div>
 
-        <div className="form-group">
-          <label htmlFor="name">Name (optional)</label>
-          <input
-            id="name"
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="My Raspberry Pi"
-          />
-        </div>
-
         <div className="dialog-actions">
           <button onClick={onClose} className="secondary" disabled={isConnecting}>
             Cancel
           </button>
-          <button onClick={handleAdd} className="secondary" disabled={isConnecting}>
-            Add Only
-          </button>
           <button onClick={handleConnect} disabled={isConnecting}>
-            {isConnecting ? "Connecting..." : "Add & Connect"}
+            {isConnecting ? "Connecting..." : "Connect"}
           </button>
         </div>
       </div>

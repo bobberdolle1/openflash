@@ -1,11 +1,11 @@
 blank_issues_enabled: false
 contact_links:
   - name: 💬 Discussions
-    url: https://github.com/openflash/openflash/discussions
+    url: https://github.com/bobberdolle1/openflash/discussions
     about: Ask questions and discuss ideas
   - name: 📖 Documentation
-    url: https://github.com/openflash/openflash/wiki
+    url: https://github.com/bobberdolle1/openflash/wiki
     about: Check the wiki for guides and documentation
   - name: 🔒 Security Issues
-    url: https://github.com/openflash/openflash/security/advisories/new
+    url: https://github.com/bobberdolle1/openflash/security/advisories/new
     about: Report security vulnerabilities privately

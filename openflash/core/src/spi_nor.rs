@@ -138,7 +138,13 @@ pub fn get_spi_nor_chip_info(jedec_id: &[u8; 3]) -> Option<SpiNorChipInfo> {
     get_spi_nor_chip_info_generic(mfr, jedec_id)
 }
 
-fn get_spi_nor_chip_info_exact(jedec_id: &[u8; 3]) -> Option<SpiNorChipInfo> {
+/// An exact catalogue entry for `jedec_id`, or `None`.
+///
+/// Distinct from [`get_spi_nor_chip_info`], which falls back to geometry derived
+/// from the capacity byte. "In the catalogue" and "guessed from the id" are
+/// different claims, and a caller searching several databases at once needs to
+/// be able to ask for the first.
+pub fn get_spi_nor_chip_info_exact(jedec_id: &[u8; 3]) -> Option<SpiNorChipInfo> {
     match jedec_id {
         // ============ Winbond W25Q Series ============
         [0xEF, 0x40, 0x14] => Some(SpiNorChipInfo {
@@ -1154,18 +1160,20 @@ fn get_spi_nor_chip_info_generic(mfr: u8, jedec_id: &[u8; 3]) -> Option<SpiNorCh
     let manufacturer = get_spi_nor_manufacturer_name(mfr).to_string();
     let capacity_byte = jedec_id[2];
 
-    // Capacity byte typically encodes size as 2^N bytes
+    // The capacity byte is the base-2 logarithm of the size in bytes: 0x15 is
+    // 2^21 = 2 MiB (a 16 Mbit part), 0x18 is 2^24 = 16 MiB, and so on. The range
+    // starts at 0x10 (64 KiB) because smaller SPI NOR parts exist and used to be
+    // rejected here as unknown.
     let (size_bytes, address_bytes) = match capacity_byte {
-        0x14 => (1024 * 1024, 3),       // 8Mbit = 1MB
-        0x15 => (2 * 1024 * 1024, 3),   // 16Mbit = 2MB
-        0x16 => (4 * 1024 * 1024, 3),   // 32Mbit = 4MB
-        0x17 => (8 * 1024 * 1024, 3),   // 64Mbit = 8MB
-        0x18 => (16 * 1024 * 1024, 3),  // 128Mbit = 16MB
-        0x19 => (32 * 1024 * 1024, 4),  // 256Mbit = 32MB
-        0x1A => (64 * 1024 * 1024, 4),  // 512Mbit = 64MB
-        0x1B => (128 * 1024 * 1024, 4), // 1Gbit = 128MB
-        0x20 => (64 * 1024 * 1024, 4),  // Alternative 512Mbit
-        0x21 => (128 * 1024 * 1024, 4), // Alternative 1Gbit
+        0x10..=0x1B => {
+            let size_bytes = 1u32 << capacity_byte;
+            // Three address bytes reach 16 MiB; anything larger needs four.
+            let address_bytes = if size_bytes > 16 * 1024 * 1024 { 4 } else { 3 };
+            (size_bytes, address_bytes)
+        }
+        // Some vendors number their largest parts outside the logarithmic scheme.
+        0x20 => (64 * 1024 * 1024, 4),
+        0x21 => (128 * 1024 * 1024, 4),
         _ => return None,
     };
 

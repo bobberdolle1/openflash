@@ -42,16 +42,17 @@ Feature requests are welcome! Please:
 
 ### Prerequisites
 
-- Rust 1.70+ (`rustup update stable`)
-- Node.js 18+ 
-- Tauri CLI (`cargo install tauri-cli`)
+- Rust 1.85+ for the library, the CLI and the board agents; 1.88+ for the
+  desktop app, which pulls in a newer dependency tree (`rustup update stable`)
+- Node.js 18+, only for the desktop app
+- Tauri CLI (`cargo install tauri-cli`), only for the desktop app
 
 ### Building
 
 ```bash
 # Clone your fork
 git clone https://github.com/YOUR_USERNAME/openflash.git
-cd openflash/openflash
+cd bobberdolle1/openflash
 
 # Install frontend dependencies
 cd gui && npm install && cd ..
@@ -119,7 +120,7 @@ Firmware requires actual hardware for testing. Document your test setup in PRs.
 - 🌍 **Translations**: UI localization
 - 🧪 **Testing**: Edge cases, stress testing
 - 🎨 **Design**: UI/UX improvements
-- 🔧 **Features**: See [Issues](https://github.com/openflash/openflash/issues)
+- 🔧 **Features**: See [Issues](https://github.com/bobberdolle1/openflash/issues)
 
 ## Recognition
 
@@ -130,7 +131,7 @@ Contributors are recognized in:
 
 ## Questions?
 
-- Open a [Discussion](https://github.com/openflash/openflash/discussions)
+- Open a [Discussion](https://github.com/bobberdolle1/openflash/discussions)
 - Join our community chat (coming soon)
 
 Thank you for contributing! 🔥

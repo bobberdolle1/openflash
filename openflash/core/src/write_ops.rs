@@ -492,6 +492,9 @@ pub struct ChipProgrammer {
     /// Total blocks
     total_blocks: u32,
     /// OOB size per page
+    // Part of the geometry description; the write path derives OOB placement
+    // from the ECC layout instead, so nothing reads this yet.
+    #[allow(dead_code)]
     oob_size: u32,
     /// Bad block table
     bbt: BadBlockTable,

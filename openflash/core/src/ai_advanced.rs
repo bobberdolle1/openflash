@@ -649,6 +649,9 @@ pub struct RootfsExtractor {
     /// Maximum file size to extract
     max_file_size: u64,
     /// Preserve permissions
+    // Configured but not consulted yet: extraction currently writes with the
+    // caller's umask. Kept so the setting survives until extraction honours it.
+    #[allow(dead_code)]
     preserve_permissions: bool,
 }
 
@@ -980,6 +983,8 @@ pub struct VulnScanResult {
 #[derive(Debug, Clone)]
 pub struct VulnScanner {
     /// CVE database version
+    // Recorded for reporting once scan results carry provenance metadata.
+    #[allow(dead_code)]
     db_version: String,
     /// Total signatures
     signature_count: usize,

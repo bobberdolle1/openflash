@@ -172,22 +172,22 @@ pub enum Command {
     HardwareStatus = 0xEF,  // Get hardware status
 
     // Cloud & Pro Commands (0xF0-0xFF) - v3.0
-    CloudAuth = 0xF0,           // Authenticate with cloud
-    CloudLogout = 0xF1,         // Logout from cloud
-    CloudGetProfile = 0xF2,     // Get user profile
-    CloudSyncStart = 0xF3,      // Start sync
-    CloudSyncStatus = 0xF4,     // Get sync status
-    CloudUpload = 0xF5,         // Upload item
-    CloudDownload = 0xF6,       // Download item
-    CloudListShared = 0xF7,     // List shared items
-    CloudShare = 0xF8,          // Share item
-    CloudSubmitChip = 0xF9,     // Submit chip contribution
-    CloudGetChipUpdates = 0xFA, // Get chip database updates
-    CloudCheckAiUpdates = 0xFB, // Check AI model updates
+    CloudAuth = 0xF0,            // Authenticate with cloud
+    CloudLogout = 0xF1,          // Logout from cloud
+    CloudGetProfile = 0xF2,      // Get user profile
+    CloudSyncStart = 0xF3,       // Start sync
+    CloudSyncStatus = 0xF4,      // Get sync status
+    CloudUpload = 0xF5,          // Upload item
+    CloudDownload = 0xF6,        // Download item
+    CloudListShared = 0xF7,      // List shared items
+    CloudShare = 0xF8,           // Share item
+    CloudSubmitChip = 0xF9,      // Submit chip contribution
+    CloudGetChipUpdates = 0xFA,  // Get chip database updates
+    CloudCheckAiUpdates = 0xFB,  // Check AI model updates
     CloudDownloadAiModel = 0xFC, // Download AI model
-    CloudCreateTicket = 0xFD,   // Create support ticket
-    CloudGetTickets = 0xFE,     // Get support tickets
-    CloudStatus = 0xFF,         // Cloud status
+    CloudCreateTicket = 0xFD,    // Create support ticket
+    CloudGetTickets = 0xFE,      // Get support tickets
+    CloudStatus = 0xFF,          // Cloud status
 }
 
 impl Command {
@@ -697,7 +697,10 @@ mod tests {
         assert_eq!(Command::from_u8(0x01), Some(Command::Ping));
         assert_eq!(Command::from_u8(0x14), Some(Command::NandReadId));
         assert_eq!(Command::from_u8(0x20), Some(Command::SpiNandReadId));
-        assert_eq!(Command::from_u8(0xFF), None);
+        // 0xFF used to be unassigned, but v3.0 gave the whole 0xF0-0xFF range to
+        // the cloud commands, so an unassigned opcode has to come from a gap.
+        assert_eq!(Command::from_u8(0xFF), Some(Command::CloudStatus));
+        assert_eq!(Command::from_u8(0xCF), None);
     }
 
     #[test]

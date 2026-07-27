@@ -447,7 +447,7 @@ pub enum BatchJobType {
 }
 
 /// Batch job configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct BatchJobConfig {
     /// Input file (for write operations)
     pub input_file: Option<String>,
@@ -465,21 +465,6 @@ pub struct BatchJobConfig {
     pub script_path: Option<String>,
     /// Custom parameters
     pub params: HashMap<String, String>,
-}
-
-impl Default for BatchJobConfig {
-    fn default() -> Self {
-        Self {
-            input_file: None,
-            output_file: None,
-            read_options: None,
-            write_options: None,
-            analysis_options: None,
-            report_options: None,
-            script_path: None,
-            params: HashMap::new(),
-        }
-    }
 }
 
 /// Batch job status

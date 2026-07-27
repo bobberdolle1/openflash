@@ -179,7 +179,7 @@ pub fn get_emmc_chip_info(cid: &[u8]) -> Option<EmmcChipInfo> {
     // Extract product name (6 bytes, ASCII)
     let pnm: String = cid[3..9]
         .iter()
-        .filter(|&&b| b >= 0x20 && b <= 0x7E)
+        .filter(|&&b| (0x20..=0x7E).contains(&b))
         .map(|&b| b as char)
         .collect();
 

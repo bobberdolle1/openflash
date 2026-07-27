@@ -1,6 +1,12 @@
 //! Error Correction Code implementations for NAND flash
 //! Supports Hamming and BCH algorithms
 
+// The BCH routines below are transcriptions of the standard Galois-field
+// algorithms, where the loop counter is the field exponent and is used to index
+// several tables at once. Rewriting them as iterator chains would obscure the
+// correspondence with the published algorithm without making them safer.
+#![allow(clippy::needless_range_loop)]
+
 use serde::{Deserialize, Serialize};
 
 /// ECC algorithm selection
@@ -182,10 +188,10 @@ impl HammingEcc {
 
         let bit_errors: u32 = xor_result.iter().map(|b| b.count_ones()).sum();
 
-        if bit_errors == 0 {
+        // A single differing bit lies in the ECC bytes themselves rather than in
+        // the data, so both cases leave the data untouched and report 0 fixes.
+        if bit_errors <= 1 {
             Ok(0)
-        } else if bit_errors == 1 {
-            Ok(0) // ECC area error
         } else if self.is_correctable(&xor_result) {
             let byte_pos = self.get_error_position(&xor_result);
             let bit_pos = (xor_result[0] & 0x07) as usize;
@@ -312,7 +318,7 @@ impl BchEcc {
         let mut syndromes = vec![0u16; 2 * self.t as usize];
 
         // Combine data and ECC into received polynomial
-        let total_bits = data.len() * 8 + ecc.len() * 8;
+        let _total_bits = data.len() * 8 + ecc.len() * 8;
 
         for i in 0..syndromes.len() {
             let alpha_i = self.gf.alpha(i + 1);

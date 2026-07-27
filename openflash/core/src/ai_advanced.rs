@@ -649,6 +649,9 @@ pub struct RootfsExtractor {
     /// Maximum file size to extract
     max_file_size: u64,
     /// Preserve permissions
+    // Configured but not consulted yet: extraction currently writes with the
+    // caller's umask. Kept so the setting survives until extraction honours it.
+    #[allow(dead_code)]
     preserve_permissions: bool,
 }
 
@@ -978,6 +981,8 @@ pub struct VulnScanResult {
 #[derive(Debug, Clone)]
 pub struct VulnScanner {
     /// CVE database version
+    // Recorded for reporting once scan results carry provenance metadata.
+    #[allow(dead_code)]
     db_version: String,
     /// Total signatures
     signature_count: usize,
@@ -1545,29 +1550,29 @@ fn estimate_section_size(data: &[u8], offset: usize, sig_type: &str) -> u64 {
             // Try to read size from header
             if offset + 64 <= data.len() {
                 // SquashFS: size at offset 40
-                if data.len() > offset + 4 && &data[offset..offset + 4] == [0x68, 0x73, 0x71, 0x73]
+                if data.len() > offset + 4
+                    && data[offset..offset + 4] == [0x68, 0x73, 0x71, 0x73]
+                    && offset + 48 <= data.len()
                 {
-                    if offset + 48 <= data.len() {
-                        let size = u64::from_le_bytes([
-                            data[offset + 40],
-                            data[offset + 41],
-                            data[offset + 42],
-                            data[offset + 43],
-                            data[offset + 44],
-                            data[offset + 45],
-                            data[offset + 46],
-                            data[offset + 47],
-                        ]);
-                        if size > 0 && size <= remaining as u64 {
-                            return size;
-                        }
+                    let size = u64::from_le_bytes([
+                        data[offset + 40],
+                        data[offset + 41],
+                        data[offset + 42],
+                        data[offset + 43],
+                        data[offset + 44],
+                        data[offset + 45],
+                        data[offset + 46],
+                        data[offset + 47],
+                    ]);
+                    if size > 0 && size <= remaining as u64 {
+                        return size;
                     }
                 }
             }
             // Default: use remaining data
             remaining.max(64) as u64
         }
-        _ => remaining.min(1024 * 1024).max(64) as u64,
+        _ => remaining.clamp(64, 1024 * 1024) as u64,
     }
 }
 

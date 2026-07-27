@@ -9,18 +9,13 @@ use serde::{Deserialize, Serialize};
 // ============================================================================
 
 /// Bus width configuration for parallel NAND
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum NandBusWidth {
     /// 8-bit data bus (x8)
+    #[default]
     X8,
     /// 16-bit data bus (x16)
     X16,
-}
-
-impl Default for NandBusWidth {
-    fn default() -> Self {
-        NandBusWidth::X8
-    }
 }
 
 impl NandBusWidth {
@@ -1347,7 +1342,7 @@ pub fn parse_onfi_parameter_page(data: &[u8]) -> Option<NandChipInfo> {
         (total_blocks as u64 * pages_per_block as u64 * page_size as u64 / 1024 / 1024) as u32;
 
     // Parse timing (simplified)
-    let t_prog = u16::from_le_bytes([data[133], data[134]]);
+    let _t_prog = u16::from_le_bytes([data[133], data[134]]);
     let t_r = u16::from_le_bytes([data[139], data[140]]);
 
     Some(NandChipInfo {

@@ -145,7 +145,7 @@ fn get_spi_nor_chip_info_exact(jedec_id: &[u8; 3]) -> Option<SpiNorChipInfo> {
             manufacturer: "Winbond".into(),
             model: "W25Q80DV".into(),
             jedec_id: *jedec_id,
-            size_bytes: 1 * 1024 * 1024, // 1MB
+            size_bytes: 1024 * 1024, // 1MB
             page_size: 256,
             sector_size: 4096,
             block_size: 65536,
@@ -302,7 +302,7 @@ fn get_spi_nor_chip_info_exact(jedec_id: &[u8; 3]) -> Option<SpiNorChipInfo> {
             manufacturer: "Macronix".into(),
             model: "MX25L8035E".into(),
             jedec_id: *jedec_id,
-            size_bytes: 1 * 1024 * 1024,
+            size_bytes: 1024 * 1024,
             page_size: 256,
             sector_size: 4096,
             block_size: 65536,
@@ -445,7 +445,7 @@ fn get_spi_nor_chip_info_exact(jedec_id: &[u8; 3]) -> Option<SpiNorChipInfo> {
             manufacturer: "ISSI".into(),
             model: "IS25LP080D".into(),
             jedec_id: *jedec_id,
-            size_bytes: 1 * 1024 * 1024,
+            size_bytes: 1024 * 1024,
             page_size: 256,
             sector_size: 4096,
             block_size: 65536,
@@ -602,7 +602,7 @@ fn get_spi_nor_chip_info_exact(jedec_id: &[u8; 3]) -> Option<SpiNorChipInfo> {
             manufacturer: "GigaDevice".into(),
             model: "GD25Q80C".into(),
             jedec_id: *jedec_id,
-            size_bytes: 1 * 1024 * 1024,
+            size_bytes: 1024 * 1024,
             page_size: 256,
             sector_size: 4096,
             block_size: 65536,
@@ -773,7 +773,7 @@ fn get_spi_nor_chip_info_exact(jedec_id: &[u8; 3]) -> Option<SpiNorChipInfo> {
             manufacturer: "EON".into(),
             model: "EN25QH80A".into(),
             jedec_id: *jedec_id,
-            size_bytes: 1 * 1024 * 1024,
+            size_bytes: 1024 * 1024,
             page_size: 256,
             sector_size: 4096,
             block_size: 65536,
@@ -1018,7 +1018,7 @@ fn get_spi_nor_chip_info_exact(jedec_id: &[u8; 3]) -> Option<SpiNorChipInfo> {
             manufacturer: "Puya".into(),
             model: "P25Q80H".into(),
             jedec_id: *jedec_id,
-            size_bytes: 1 * 1024 * 1024,
+            size_bytes: 1024 * 1024,
             page_size: 256,
             sector_size: 4096,
             block_size: 65536,
@@ -1156,7 +1156,7 @@ fn get_spi_nor_chip_info_generic(mfr: u8, jedec_id: &[u8; 3]) -> Option<SpiNorCh
 
     // Capacity byte typically encodes size as 2^N bytes
     let (size_bytes, address_bytes) = match capacity_byte {
-        0x14 => (1 * 1024 * 1024, 3),   // 8Mbit = 1MB
+        0x14 => (1024 * 1024, 3),       // 8Mbit = 1MB
         0x15 => (2 * 1024 * 1024, 3),   // 16Mbit = 2MB
         0x16 => (4 * 1024 * 1024, 3),   // 32Mbit = 4MB
         0x17 => (8 * 1024 * 1024, 3),   // 64Mbit = 8MB
@@ -1754,7 +1754,7 @@ mod proptests {
 
             let jedec_id = known_ids[idx];
             let info = get_spi_nor_chip_info(&jedec_id)
-                .expect(&format!("Known JEDEC ID {:?} should be in database", jedec_id));
+                .unwrap_or_else(|| panic!("Known JEDEC ID {:?} should be in database", jedec_id));
 
             // Property: returned JEDEC ID must match query ID
             prop_assert_eq!(info.jedec_id, jedec_id,

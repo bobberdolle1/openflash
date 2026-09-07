@@ -11,8 +11,8 @@ rust-version.workspace = true
 # Protocol handling and SPI NOR sequencing are shared with the other SBC agents,
 # so this crate cannot drift away from what the host speaks.
 openflash-sbc-agent = { workspace = true }
-rppal = "0.18"
-thiserror = "1.0"
+rppal = "0.22"
+thiserror = "2.0"
 log = "0.4"
 env_logger = "0.11"
 

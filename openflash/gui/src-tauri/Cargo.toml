@@ -27,7 +27,7 @@ serde_json = { workspace = true }
 # Device access goes through openflash-core, which owns the USB transport; the
 # GUI no longer talks to nusb itself.
 openflash-core = { workspace = true }
-dirs = "5"
+dirs = "6"
 
 [features]
 default = ["custom-protocol", "usb"]
